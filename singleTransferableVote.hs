@@ -1,3 +1,5 @@
+import Data.List
+
 votes :: [[String]]
 votes = [
     ["","","D. Abbott","E. Balls","A. Burbhm","D. Milliband","E. Milliband"],
@@ -290,9 +292,12 @@ numSeats = 2
 rmEmptyStrings :: [[String]] -> [[String]]
 rmEmptyStrings = filter (not . null) . map (filter (not . null)) 
 
--- Discard first item in list, not a vote
+-- keep only the voting scores from each list
+rmNames :: [[String]] -> [[String]]
+rmNames (x:xs) = [ drop 2 x | x <- xs]
+
 cleanVotes :: [[String]]
-cleanVotes = rmEmptyStrings (tail votes)
+cleanVotes = rmNames (rmEmptyStrings votes)
 
 votesLength :: Int
 votesLength = length cleanVotes
