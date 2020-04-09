@@ -312,13 +312,14 @@ votesLength = length cleanVotes
 quota :: Int
 quota = (votesLength `div` (numSeats + 1)) + 1
 
+
 -- go through each vote and apply zipCandidate
--- groupCandidateVote :: [[(String, String)]]
--- groupCandidateVote = map cleanVotes zipCandidate
+groupCandidateVote :: [[(String, String)]]
+groupCandidateVote = map zipCandidate cleanVotes
 
 -- zip candidate with specific vote
--- zipCandidate :: [String] -> [(String, String)]
--- zipCandidate vote = zip candidates vote
+zipCandidate :: [String] -> [(String, String)]
+zipCandidate = zip candidates
 
 sortVotes :: [[String]]
 sortVotes = map isort cleanVotes
