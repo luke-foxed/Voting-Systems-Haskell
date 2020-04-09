@@ -291,6 +291,10 @@ votes = [
     -- [""]
     ]
 
+------------------------
+-- SORTING & CLEANING --
+------------------------
+
 -- get candidates
 candidates :: [String]
 candidates = drop 2 (head votes)
@@ -312,25 +316,39 @@ votesLength = length cleanVotes
 quota :: Int
 quota = (votesLength `div` (numSeats + 1)) + 1
 
-
 -- go through each vote and apply zipCandidate
-groupCandidateVote :: [[(String, String)]]
-groupCandidateVote = map zipCandidate cleanVotes
+groupCandidateVotes :: [[(String, String)]]
+groupCandidateVotes = map zipCandidate cleanVotes
 
 -- zip candidate with specific vote
 zipCandidate :: [String] -> [(String, String)]
 zipCandidate = zip candidates
 
-sortVotes :: [[String]]
-sortVotes = map isort cleanVotes
+sortVotes :: [[(String, String)]]
+sortVotes = map isort groupCandidateVotes
 
--- from notes
-insertion :: Ord a => a -> [a] -> [a]
-insertion x [] = [x]
-insertion x (y:ys)
-    | x <= y = x : y : ys
-    | otherwise = y: insertion x ys
-
-isort :: Ord a => [a] -> [a]
+-- taken from notes 
+isort :: Ord a => [(String, a)] -> [(String, a)]
 isort [] = []
-isort (x:xs) = insertion x (isort xs) 
+isort (x:xs) = insertion x (isort xs)
+
+-- taken from notes and modified to apply on second string in tuple
+insertion :: Ord a => (String, a) -> [(String, a)]  -> [(String, a)]
+insertion x [] = [x]
+insertion x (y:ys) 
+                | snd x <= snd y = x : y : ys
+                | otherwise = y: insertion x ys
+
+-- return list of candidates sorted by vote number
+extractVotes :: [[String]]
+extractVotes = map rmEmptyVotes sortVotes
+
+-- remove asterix and vote number which isn't needed 
+rmEmptyVotes :: [(String, String)] -> [String]
+rmEmptyVotes vote = [fst x | x <- vote, snd x /= "*"]
+
+------------------------
+--     PROCESSING     --
+------------------------
+
+-- next task is to get the winner
