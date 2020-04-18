@@ -380,3 +380,23 @@ getWinner bs = case rankCandidates (rmEmptyBallots bs) of
 
 startAlternativeVoting :: String
 startAlternativeVoting = getWinner extractVotes
+
+------------------------
+--      ST VOTE       --
+------------------------
+
+-- take first vote of sorted list of votes
+extractFirstVote:: [String] -> (String, [String])
+extractFirstVote (x:xs) = (x, xs)
+
+-- seperate first vote from other votes
+seperateVote :: [(String, [String])]
+seperateVote = map (extractFirstVote) extractVotes
+
+-- return a list of each first vote
+listFirstVote :: [String]
+listFirstVote = [fst x | x <- seperateVote]
+
+-- get tuple of candidate and vote (modified from https://codereview.stackexchange.com/questions/88720/return-list-with-numbers-of-color-occurrences-in-another-list)
+countFirstVote :: [String] -> [(String,Int)]
+countFirstVote xs = zip candidates (map (\c -> length (filter (== c) xs)) candidates)
