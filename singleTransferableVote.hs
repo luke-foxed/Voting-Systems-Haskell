@@ -401,11 +401,18 @@ countFirstVote :: [String] -> [(String,Int)]
 countFirstVote xs = isort (zip candidates (map (\x -> length (filter (== x) xs)) candidates))
 
 -- get last candidate in sorted list
-firstRoundWinner :: [(String,Int)]
-firstRoundWinner =  drop 4 (countFirstVote listFirstVote)  
+roundWinner :: Int -> (String, Int)
+roundWinner index = (countFirstVote listFirstVote) !! (length (countFirstVote listFirstVote) - index)
 
--- if vote count exceeds quota, get surplus
-getSurplus :: [(String,Int)] -> Int
-getSurplus (x:xs) | snd x > quota = (snd x) - quota
-                  | otherwise = 0
+-- if vote count exceeds quota, add surplus to next roundWinner
+-- this needs to be recursive to change roundWinner value
+getSurplus :: (String, Int) -> (String, Int)
+getSurplus (x, y) | y > quota = (addSurplus quota (roundWinner 2))
+                  | otherwise = (x, y)
 
+-- add surplus to candidate
+addSurplus :: Int -> (String, Int) -> (String, Int)
+addSurplus z (x, y) = (x, y + z) 
+
+
+-- WEIGHT NEEDS TO BE FACTORED IN
