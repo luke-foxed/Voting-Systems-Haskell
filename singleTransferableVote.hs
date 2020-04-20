@@ -2,7 +2,9 @@ import Data.List(sort,maximumBy)
 import Data.Ord(comparing)
 
 -- temp hard code available seats 
+weight :: Double
 weight = 1000
+
 numSeats = 4
 
 votes :: [[String]]
@@ -414,5 +416,7 @@ getSurplus (x, y) | y > quota = (addSurplus quota (roundWinner 2))
 addSurplus :: Int -> (String, Int) -> (String, Int)
 addSurplus z (x, y) = (x, y + z) 
 
+removeLoser :: [(String, Int)] -> [(String, Int)]
+removeLoser xs = tail xs
 
 -- WEIGHT NEEDS TO BE FACTORED IN
