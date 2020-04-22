@@ -8,8 +8,7 @@ main = do
 
     csvData <- readFile "votes.csv"
     let formatted = parseRawVotes csvData
-    let cleanedVotes = extractVotes
-
+    let votes = extractVotes formatted
 
     putStrLn "Please Select A Voting System:\n"
     putStrLn "1) Alternative Vote"
@@ -17,8 +16,8 @@ main = do
     choice <- getLine
 
     if choice == "1" then do 
-        let altVoteWinner = startAlternativeVoting cleanedVotes
-        print(altVoteWinner)
+        let altVoteWinner = startAlternativeVoting votes
+        print ("Winner is: " ++ altVoteWinner)
 
     else if choice =="2" then putStrLn "Running STV"
     else putStrLn "Please enter a valid option"

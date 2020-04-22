@@ -15,12 +15,9 @@ parseRawVotes rawVotes = map convertToList (tail (splitOn "\n" rawVotes))
 convertToList :: String -> [String]
 convertToList vote = splitOn "," vote
 
-votes :: [[String]]
-votes = []
-
 -- get candidates
-candidates :: [String]
-candidates = drop 2 (head votes)
+candidates :: [[String]] -> [String]
+candidates votes = drop 2 (head votes)
 
 -- ignore list items that contain empty strings
 rmEmptyStrings :: [[String]] -> [[String]]
@@ -30,25 +27,25 @@ rmEmptyStrings = filter (not . null) . map (filter (not . null))
 rmNames :: [[String]] -> [[String]]
 rmNames (x:xs) = [ drop 2 x | x <- xs]
 
-cleanVotes :: [[String]]
-cleanVotes = rmNames (rmEmptyStrings votes)
+cleanVotes :: [[String]] -> [[String]]
+cleanVotes votes = rmNames (rmEmptyStrings votes)
 
-votesLength :: Int
-votesLength = length cleanVotes
+votesLength :: [[String]] -> Int
+votesLength votes = length (cleanVotes votes)
 
-quota :: Int
-quota = (votesLength `div` (numSeats + 1)) + 1
+quota :: [[String]] -> Int
+quota votes = ((votesLength votes) `div` (numSeats + 1)) + 1
 
 -- go through each vote and apply zipCandidate
-groupCandidateVotes :: [[(String, String)]]
-groupCandidateVotes = map zipCandidate cleanVotes
+groupCandidateVotes :: [[String]] -> [[(String, String)]]
+groupCandidateVotes votes = map (zipCandidate votes) (cleanVotes votes)
 
 -- zip candidate with specific vote
-zipCandidate :: [String] -> [(String, String)]
-zipCandidate = zip candidates
+zipCandidate :: [[String]] -> [String] -> [(String, String)]
+zipCandidate votes = zip (candidates votes)
 
-sortVotes :: [[(String, String)]]
-sortVotes = map isort groupCandidateVotes
+sortVotes :: [[String]] -> [[(String, String)]]
+sortVotes votes = map isort (groupCandidateVotes votes)
 
 -- taken from notes 
 isort :: Ord a => [(String, a)] -> [(String, a)]
@@ -63,8 +60,8 @@ insertion x (y:ys)
                 | otherwise = y: insertion x ys
 
 -- return list of candidates sorted by vote number
-extractVotes :: [[String]]
-extractVotes = map rmEmptyVotes sortVotes
+extractVotes :: [[String]] -> [[String]]
+extractVotes votes = map rmEmptyVotes (sortVotes votes)
 
 -- remove asterix and vote number which isn't needed 
 rmEmptyVotes :: [(String, String)] -> [String]

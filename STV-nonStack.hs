@@ -323,7 +323,7 @@ groupCandidateVotes = map zipCandidate cleanVotes
 
 -- zip candidate with specific vote
 zipCandidate :: [String] -> [(String, String)]
-zipCandidate = zip candidates
+zipCandidate vote = zip candidates vote
 
 sortVotes :: [[(String, String)]]
 sortVotes = map isort groupCandidateVotes
