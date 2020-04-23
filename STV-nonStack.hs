@@ -292,6 +292,26 @@ votes = [
     [""]
     ]
 
+
+getCandidateIndex :: [Int] -> [String]
+getCandidateIndex vote = [ candidates !!(x-1) | x <- vote ]
+
+readToInt :: [String] -> [Int]
+readToInt = map (read::String->Int)
+
+rmEmptyVotes2 :: [String] -> [String]
+rmEmptyVotes2 vote = [x | x <- vote, x /= "*"]
+
+cleanedVotesToInt :: [[Int]]
+cleanedVotesToInt = map readToInt (map rmEmptyVotes2 cleanVotes)
+
+votesToCandidates :: [[String]]
+votesToCandidates = map getCandidateIndex cleanedVotesToInt
+
+
+-- removeBreak :: [(String, String)] -> [(String, String)]
+-- removeBreak vote = [(fst x, snd x) | x <- vote, let current = snd x]
+
 ------------------------
 -- SORTING & CLEANING --
 ------------------------
