@@ -1,5 +1,6 @@
-import Data.List(sort,maximumBy)
+import Data.List(sort,maximumBy,nub, group)
 import Data.Ord(comparing)
+
 
 -- temp hard code available seats 
 weight :: Double
@@ -288,29 +289,9 @@ votes = [
     ["263","RtHon S Woodward MP ","5","3","4","1","2"],
     ["264","Mr P Woolas MP  ","*","*","*","1","*"],
     ["265","Mr D Wright MP  ","*","1","4","2","3"],
-    ["266","Mr I D Wright MP ","5","1","3","4","2"],
+    ["266","Mr I D Wright MP ","2","1","3","3","5"],
     [""]
     ]
-
-
-getCandidateIndex :: [Int] -> [String]
-getCandidateIndex vote = [ candidates !!(x-1) | x <- vote ]
-
-readToInt :: [String] -> [Int]
-readToInt = map (read::String->Int)
-
-rmEmptyVotes2 :: [String] -> [String]
-rmEmptyVotes2 vote = [x | x <- vote, x /= "*"]
-
-cleanedVotesToInt :: [[Int]]
-cleanedVotesToInt = map readToInt (map rmEmptyVotes2 cleanVotes)
-
-votesToCandidates :: [[String]]
-votesToCandidates = map getCandidateIndex cleanedVotesToInt
-
-
--- removeBreak :: [(String, String)] -> [(String, String)]
--- removeBreak vote = [(fst x, snd x) | x <- vote, let current = snd x]
 
 ------------------------
 -- SORTING & CLEANING --
@@ -328,45 +309,52 @@ rmEmptyStrings = filter (not . null) . map (filter (not . null))
 rmNames :: [[String]] -> [[String]]
 rmNames (x:xs) = [ drop 2 x | x <- xs]
 
-cleanVotes :: [[String]]
-cleanVotes = rmNames (rmEmptyStrings votes)
+extractVotes :: [[String]]
+extractVotes = rmNames (rmEmptyStrings votes)
 
 votesLength :: Int
-votesLength = length cleanVotes
+votesLength = length extractVotes
 
 quota :: Int
 quota = (votesLength `div` (numSeats + 1)) + 1
 
--- go through each vote and apply zipCandidate
-groupCandidateVotes :: [[(String, String)]]
-groupCandidateVotes = map zipCandidate cleanVotes
-
--- zip candidate with specific vote
-zipCandidate :: [String] -> [(String, String)]
-zipCandidate vote = zip candidates vote
-
-sortVotes :: [[(String, String)]]
-sortVotes = map isort groupCandidateVotes
-
 -- taken from notes 
-isort :: Ord a => [(String, a)] -> [(String, a)]
+isort :: Ord a => [a] -> [a]
 isort [] = []
 isort (x:xs) = insertion x (isort xs)
 
 -- taken from notes and modified to apply on second string in tuple
-insertion :: Ord a => (String, a) -> [(String, a)]  -> [(String, a)]
+insertion :: Ord a => a -> [a]  -> [a]
 insertion x [] = [x]
 insertion x (y:ys) 
-                | snd x <= snd y = x : y : ys
+                | x <= y = x : y : ys
                 | otherwise = y: insertion x ys
 
--- return list of candidates sorted by vote number
-extractVotes :: [[String]]
-extractVotes = map rmEmptyVotes sortVotes
+getCandidateIndex :: [Int] -> [String]
+getCandidateIndex vote = [ candidates !!(x-1) | x <- vote ]
 
--- remove asterix and vote number which isn't needed 
-rmEmptyVotes :: [(String, String)] -> [String]
-rmEmptyVotes vote = [fst x | x <- vote, snd x /= "*"]
+readToInt :: [String] -> [Int]
+readToInt = map read
+
+rmEmptyVotes :: [String] -> [String]
+rmEmptyVotes vote = [x | x <- vote, x /= "*"]
+
+sortedVotes :: [[Int]]
+sortedVotes = map isort (map readToInt (map rmEmptyVotes extractVotes))
+
+rmInvalidVotes :: [[Int]]
+rmInvalidVotes = map takeUntilDuplicate sortedVotes
+
+-- take from list until duplicate is encountered, modified from: https://stackoverflow.com/questions/28755554/taking-from-a-list-until-encountering-a-duplicate
+takeUntilDuplicate :: Eq a => [a] -> [a]
+takeUntilDuplicate = helper []
+    where helper seen [] = seen
+          helper seen (x:xs)
+              | x `elem` seen = init seen
+              | otherwise = helper (seen ++ [x]) xs
+
+cleanedVotes :: [[String]]
+cleanedVotes = map getCandidateIndex rmInvalidVotes
 
 ------------------------
 --  ALTERNATIVE VOTE  --
@@ -400,43 +388,67 @@ getWinner bs = case rankCandidates (rmEmptyBallots bs) of
                 (c:cs) -> getWinner (eliminateCandidate c bs)
 
 startAlternativeVoting :: String
-startAlternativeVoting = getWinner extractVotes
+startAlternativeVoting = getWinner cleanedVotes
 
 ------------------------
 --      ST VOTE       --
 ------------------------
 
--- take first vote of sorted list of votes
-extractFirstVote:: [String] -> (String, [String])
-extractFirstVote (x:xs) = (x, xs)
+-- -- take first vote of sorted list of votes
+-- extractFirstVote:: [String] -> (String, [String])
+-- extractFirstVote (x:xs) = (x, xs)
 
--- seperate first vote from other votes
-seperateVote :: [(String, [String])]
-seperateVote = map (extractFirstVote) extractVotes
+-- -- seperate first vote from other votes
+-- seperateVote :: [(String, [String])]
+-- seperateVote = map (extractFirstVote) extractVotes
 
--- return a list of each first vote
-listFirstVote :: [String]
-listFirstVote = [fst x | x <- seperateVote]
+-- -- return a list of each first vote
+-- listFirstVote :: [String]
+-- listFirstVote = [fst x | x <- seperateVote]
 
--- get tuple of candidate and vote (modified from https://codereview.stackexchange.com/questions/88720/return-list-with-numbers-of-color-occurrences-in-another-list)
-countFirstVote :: [String] -> [(String,Int)]
-countFirstVote xs = isort (zip candidates (map (\x -> length (filter (== x) xs)) candidates))
+-- -- get tuple of candidate and vote (modified from https://codereview.stackexchange.com/questions/88720/return-list-with-numbers-of-color-occurrences-in-another-list)
+-- countFirstVote :: [String] -> [(String,Int)]
+-- countFirstVote xs = isort (zip candidates (map (\x -> length (filter (== x) xs)) candidates))
 
--- get last candidate in sorted list
-roundWinner :: Int -> (String, Int)
-roundWinner index = (countFirstVote listFirstVote) !! (length (countFirstVote listFirstVote) - index)
+-- -- get last candidate in sorted list
+-- roundWinner :: Int -> (String, Int)
+-- roundWinner index = (countFirstVote listFirstVote) !! (length (countFirstVote listFirstVote) - index)
 
--- if vote count exceeds quota, add surplus to next roundWinner
--- this needs to be recursive to change roundWinner value
-getSurplus :: (String, Int) -> (String, Int)
-getSurplus (x, y) | y > quota = (addSurplus quota (roundWinner 2))
-                  | otherwise = (x, y)
+-- -- if vote count exceeds quota, add surplus to next roundWinner
+-- -- this needs to be recursive to change roundWinner value
+-- getSurplus :: (String, Int) -> (String, Int)
+-- getSurplus (x, y) | y > quota = (addSurplus quota (roundWinner 2))
+--                   | otherwise = (x, y)
 
--- add surplus to candidate
-addSurplus :: Int -> (String, Int) -> (String, Int)
-addSurplus z (x, y) = (x, y + z) 
+-- -- add surplus to candidate
+-- addSurplus :: Int -> (String, Int) -> (String, Int)
+-- addSurplus z (x, y) = (x, y + z) 
 
-removeLoser :: [(String, Int)] -> [(String, Int)]
-removeLoser xs = tail xs
+-- removeLoser :: [(String, Int)] -> [(String, Int)]
+-- removeLoser xs = tail xs
 
 -- WEIGHT NEEDS TO BE FACTORED IN
+
+
+-------------------------
+-- OLD CLEAN/SORT CODE --
+-------------------------
+
+-- -- return list of candidates sorted by vote number
+-- extractVotes :: [[String]]
+-- extractVotes = map rmEmptyVotes sortVotes
+
+-- -- remove asterix and vote number which isn't needed 
+-- rmEmptyVotes :: [(String, String)] -> [String]
+-- rmEmptyVotes vote = [fst x | x <- vote, snd x /= "*"]
+
+-- -- go through each vote and apply zipCandidate
+-- groupCandidateVotes :: [[(String, String)]]
+-- groupCandidateVotes = map zipCandidate extractVotes
+
+-- -- zip candidate with specific vote
+-- zipCandidate :: [String] -> [(String, String)]
+-- zipCandidate vote = zip candidates vote
+
+-- sortVotes :: [[(String, String)]]
+-- sortVotes = map isort groupCandidateVotes
