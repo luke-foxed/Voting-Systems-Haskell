@@ -356,23 +356,24 @@ takeUntilDuplicate = helper []
               | snd x `elem` map snd seen = init seen
               | otherwise = helper (seen ++ [x]) xs
 
-takeUntilGap :: Eq a => [(String, a)] -> [(String, a)]
-takeUntilGap = helper []
-    where helper seen [] = seen
-          helper seen (x:xs)
-              | test2 (map snd seen) "2" = init seen
-              | otherwise = helper (seen ++ [x]) xs
-
 rmVoteTally :: [(String, String)] -> [String]
 rmVoteTally vote = map fst vote
 
 finalVotes :: [[String]]
 finalVotes =  map rmVoteTally (map takeUntilDuplicate extractVotes)
 
--- test = test2 (map snd [("Hello","2")]) ["1"]
 
-test2 :: [String] -> String -> Bool
-test2 [x] y = (read x :: Int) - (read y :: Int) > 1
+-- takeUntilGap :: [(String, String)] -> [(String, String)]
+-- takeUntilGap = helper []
+--     where helper seen [] = seen
+--           helper seen (x:xs)
+--               | length seen > 0 && test2 (map snd [("Hello","2")]) "2" = init seen
+--               | otherwise = helper (seen ++ [x]) xs
+
+
+-- -- test2 :: [String] -> String -> Bool
+-- test2 [x] y = (read x :: Int) - (read y :: Int) > 1
+
 
 ------------------------
 --  ALTERNATIVE VOTE  --
@@ -445,4 +446,13 @@ startAlternativeVoting = getWinner finalVotes
 -- removeLoser :: [(String, Int)] -> [(String, Int)]
 -- removeLoser xs = tail xs
 
--- WEIGHT NEEDS TO BE FACTORED IN
+------------------------
+--     ST VOTE V2     --
+------------------------
+
+groupPref :: [String]
+firstPref = map head finalVotes
+
+-- get tuple of candidate and vote (modified from https://codereview.stackexchange.com/questions/88720/return-list-with-numbers-of-color-occurrences-in-another-list)
+votesRecieved :: [String] -> [(String,Int)]
+votesRecieved xs = reverse (isort (zip candidates (map (\x -> length (filter (== x) xs)) candidates)))
