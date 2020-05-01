@@ -470,3 +470,25 @@ removeCandidate allCans = filter (/= head allCans)
 
 runElection :: [(String, Int)]
 runElection = electOrElim (votesRecieved groupPref)
+
+
+-- steps for recursion
+-- 1. Pass in votes canididate votes recieved
+-- 2. Take head of that list and work out if quota is matched 
+-- 3. If so, add to elected list. If greater than quota, distribute votes
+-- 4. Else, drop the tail of the list and repeat 
+
+
+-- WRONG WAY OF DOING IT, DOES NOT USE WEIGHTS
+
+firstPref :: (String, Int)
+firstPref = head (votesRecieved (map head finalVotes))
+
+secondPref :: (String, Int)
+secondPref = head (votesRecieved (map head  (filter (/=[]) (map (drop 1) finalVotes))))
+
+thirdPref :: (String, Int)
+thirdPref = head (votesRecieved (map head (filter (/=[]) (map (drop 2) finalVotes))))
+
+fourthPref :: (String, Int)
+fourthPref = head (votesRecieved (map head (filter (/=[]) (map (drop 3) finalVotes))))
