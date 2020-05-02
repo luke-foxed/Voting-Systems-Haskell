@@ -9,7 +9,7 @@ numSeats = 4
 
 -- convert string output to nested list of votes
 parseRawVotes :: String -> [[String]]
-parseRawVotes rawVotes = map convertToList (tail (splitOn "\n" rawVotes))
+parseRawVotes rawVotes = map convertToList (splitOn "\n" rawVotes)
 
 -- convert each newline string to a list
 convertToList :: String -> [String]
@@ -27,6 +27,7 @@ rmEmptyStrings = filter (not . null) . map (filter (not . null))
 rmNames :: [[String]] -> [[String]]
 rmNames (x:xs) = [ drop 2 x | x <- xs]
 
+-- remove empty strings and name plus number of the person voting
 cleanVotes :: [[String]] -> [[String]]
 cleanVotes votes = rmNames (rmEmptyStrings votes)
 
@@ -44,6 +45,7 @@ groupCandidateVotes votes = map (zipCandidate votes) (cleanVotes votes)
 zipCandidate :: [[String]] -> [String] -> [(String, String)]
 zipCandidate votes = zip (candidates votes)
 
+-- sorted list of candidates and what voting preference they recieved
 sortVotes :: [[String]] -> [[(String, String)]]
 sortVotes votes = map isort (groupCandidateVotes votes)
 
@@ -60,9 +62,36 @@ insertion x (y:ys)
                 | otherwise = y: insertion x ys
 
 -- return list of candidates sorted by vote number
-extractVotes :: [[String]] -> [[String]]
+extractVotes :: [[String]] -> [[(String, String)]]
 extractVotes votes = map rmEmptyVotes (sortVotes votes)
 
 -- remove asterix and vote number which isn't needed 
-rmEmptyVotes :: [(String, String)] -> [String]
-rmEmptyVotes vote = [fst x | x <- vote, snd x /= "*"]
+rmEmptyVotes :: [(String, String)] -> [(String, String)]
+rmEmptyVotes vote = [(fst x, snd x) | x <- vote, snd x /= "*"]
+
+-- take from list until duplicate is encountered, modified from: https://stackoverflow.com/questions/28755554/taking-from-a-list-until-encountering-a-duplicate
+takeUntilDuplicate :: Eq a => [(String, a)] -> [(String, a)]
+takeUntilDuplicate = helper []
+    where helper seen [] = seen
+          helper seen (x:xs)
+              | snd x `elem` map snd seen = init seen
+              | otherwise = helper (seen ++ [x]) xs
+
+-- take from list until the a voting position is skipped (i.e. 1,2,4,5 = 1,2)
+takeUntilGap :: [(String, String)] -> [(String, String)]
+takeUntilGap = helper []
+    where helper seen [] = seen
+          helper seen (x:xs)
+              | not (null seen) && readAsInt (snd x) - readAsInt(snd (last seen)) > 1 = seen
+              | otherwise = helper (seen ++ [x]) xs
+
+-- remove voting preference number as list index represents this number
+rmVoteTally :: [(String, String)] -> [String]
+rmVoteTally = map fst
+
+readAsInt :: String -> Int
+readAsInt s = read s :: Int
+
+-- map each 'fix' to each vote
+finalVotes :: [[String]] -> [[String]]
+finalVotes votes = map rmVoteTally (map takeUntilGap (map takeUntilDuplicate (extractVotes votes)))
