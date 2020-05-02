@@ -5,6 +5,7 @@ import Data.Ord(comparing)
 weight :: Double
 weight = 1000
 
+numSeats :: Int
 numSeats = 4
 
 votes :: [[String]]
@@ -459,21 +460,11 @@ groupPref = map head finalVotes
 votesRecieved :: [String] -> [(String,Int)]
 votesRecieved xs = reverse (isort (zip candidates (map (\x -> length (filter (== x) xs)) candidates)))
 
-electOrElim :: [(String, Int)] -> [(String, Int)]
-electOrElim cans 
-            | snd (head cans) > quota = electedCandidates ++ head [cans]
-            | otherwise = removeCandidate (tail cans) cans
-            where cans = votesRecieved groupPref
-
-removeCandidate :: [(String, Int)] -> [(String, Int)] -> [(String, Int)]
-removeCandidate allCans = filter (/= head allCans)
-
-runElection :: [(String, Int)]
-runElection = electOrElim (votesRecieved groupPref)
-
+removeCandidate :: [(String, Int)] -> (String, Int) -> [(String, Int)]
+removeCandidate allCans can = filter (/=can) allCans
 
 -- steps for recursion
--- 1. Pass in votes canididate votes recieved
+-- 1. Pass in canididate votes recieved
 -- 2. Take head of that list and work out if quota is matched 
 -- 3. If so, add to elected list. If greater than quota, distribute votes
 -- 4. Else, drop the tail of the list and repeat 
@@ -492,3 +483,22 @@ thirdPref = head (votesRecieved (map head (filter (/=[]) (map (drop 2) finalVote
 
 fourthPref :: (String, Int)
 fourthPref = head (votesRecieved (map head (filter (/=[]) (map (drop 3) finalVotes))))
+
+finalPrefs :: [(String, Int)]
+finalPrefs = [firstPref] ++ [secondPref] ++ [thirdPref] ++ [fourthPref]
+
+elected :: [String]
+elected = []
+
+eliminated :: [String]
+eliminated = []
+
+-- run election without weights, if quota is met then move to elected and remove from contention, else eliminate the tail 
+startElection :: Int -> [String] -> [String] -> [(String, Int)] -> [String]
+startElection numSeats elected eliminated [] = elected
+startElection 0 elected eliminated finalPrefs = elected
+startElection seats elected eliminated finalPrefs = 
+    if snd (head finalPrefs) > quota then 
+        startElection (numSeats - 1) (elected ++ [fst (head finalPrefs)]) (eliminated) (drop 1 (finalPrefs))
+    else 
+        startElection (numSeats) (elected) (eliminated ++ [fst (last finalPrefs)]) (removeCandidate finalPrefs (last finalPrefs)) 
