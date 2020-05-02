@@ -289,7 +289,7 @@ votes = [
     ["263","RtHon S Woodward MP ","5","3","4","1","2"],
     ["264","Mr P Woolas MP  ","*","*","*","1","*"],
     ["265","Mr D Wright MP  ","*","1","4","2","3"],
-    ["266","Mr I D Wright MP ","5","1","3","4","5"],
+    ["266","Mr I D Wright MP ","*","1","3","4","5"],
     [""]
     ]
 
@@ -360,21 +360,25 @@ takeUntilDuplicate = helper []
 rmVoteTally :: [(String, String)] -> [String]
 rmVoteTally = map fst
 
-finalVotes :: [[String]]
-finalVotes =  map rmVoteTally (map takeUntilDuplicate extractVotes)
+readAsInt :: String -> Int
+readAsInt s = read s :: Int
 
 -- takeUntilGap :: [(String, String)] -> [(String, String)]
 -- takeUntilGap = helper []
 --     where helper seen [] = seen
 --           helper seen (x:xs)
---               | not (null seen) && (read (map snd seen) :: String -> Int) - (read (snd x) :: String -> Int) > 1 = init seen
+--               | not (null seen) && snd x `elem` [show (readAsInt(snd (last seen)) - 1 )] = init seen
 --               | otherwise = helper (seen ++ [x]) xs
 
+takeUntilGap :: [(String, String)] -> [(String, String)]
+takeUntilGap = helper []
+    where helper seen [] = seen
+          helper seen (x:xs)
+              | not (null seen) && readAsInt (snd x) - readAsInt(snd (last seen)) > 1 = seen
+              | otherwise = helper (seen ++ [x]) xs
 
--- test2 :: [String] -> String -> Bool
--- test2 [x] y = (read x :: Int) - (read y :: Int) > 1
-
-
+finalVotes :: [[String]]
+finalVotes =  map rmVoteTally (map takeUntilGap (map takeUntilDuplicate extractVotes))
 ------------------------
 --  ALTERNATIVE VOTE  --
 ------------------------
@@ -495,9 +499,9 @@ eliminated = []
 
 -- run election without weights, if quota is met then move to elected and remove from contention, else eliminate the tail 
 startElection :: Int -> [String] -> [String] -> [(String, Int)] -> [String]
-startElection numSeats elected eliminated [] = elected
-startElection 0 elected eliminated finalPrefs = elected
-startElection seats elected eliminated finalPrefs = 
+startElection _ _ _ [] = elected
+startElection 0 _ _ _ = elected
+startElection numSeats elected eliminated finalPrefs = 
     if snd (head finalPrefs) > quota then 
         startElection (numSeats - 1) (elected ++ [fst (head finalPrefs)]) (eliminated) (drop 1 (finalPrefs))
     else 
