@@ -1,8 +1,9 @@
-import Data.List(sort,maximumBy)
+import Data.List(sort,maximumBy,elemIndex)
 import Data.Ord(comparing)
+import Data.Maybe
 
 -- temp hard code available seats 
-weight :: Double
+weight :: Int
 weight = 1000
 
 numSeats :: Int
@@ -506,3 +507,10 @@ startElection numSeats elected eliminated finalPrefs =
         startElection (numSeats - 1) (elected ++ [fst (head finalPrefs)]) (eliminated) (drop 1 (finalPrefs))
     else 
         startElection (numSeats) (elected) (eliminated ++ [fst (last finalPrefs)]) (removeCandidate finalPrefs (last finalPrefs)) 
+
+calculateWeightFactor :: Double -> [[String]] -> String -> Double
+calculateWeightFactor surplus votes can = surplus / realToFrac(calculateTransferable votes can)
+
+-- if there are no other candidates in a list AFTER the current candidate, they have no transferable 
+calculateTransferable :: [[String]] -> String -> Int
+calculateTransferable votes can = length ([x | x <- votes, head x == can && length (tail x) /= 0])
