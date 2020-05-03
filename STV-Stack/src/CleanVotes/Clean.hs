@@ -2,14 +2,9 @@ module CleanVotes.Clean where
 
 import Data.List.Split (splitOn)
 
-weight :: Double
-weight = 1000
-
-numSeats = 4
-
 -- convert string output to nested list of votes
 parseRawVotes :: String -> [[String]]
-parseRawVotes rawVotes = map convertToList (splitOn "\n" rawVotes)
+parseRawVotes rawVotes = map convertToList (tail (splitOn "\n" rawVotes))
 
 -- convert each newline string to a list
 convertToList :: String -> [String]
@@ -30,12 +25,6 @@ rmNames (x:xs) = [ drop 2 x | x <- xs]
 -- remove empty strings and name plus number of the person voting
 cleanVotes :: [[String]] -> [[String]]
 cleanVotes votes = rmNames (rmEmptyStrings votes)
-
-votesLength :: [[String]] -> Int
-votesLength votes = length (cleanVotes votes)
-
-quota :: [[String]] -> Int
-quota votes = ((votesLength votes) `div` (numSeats + 1)) + 1
 
 -- go through each vote and apply zipCandidate
 groupCandidateVotes :: [[String]] -> [[(String, String)]]

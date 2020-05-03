@@ -1,4 +1,4 @@
-module AlternativeVote.Alternative where
+module CountVotes.Alternative where
 
 import Data.List(sort)
 

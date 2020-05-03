@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 58e22e545edf02bbffab4f2959ec1995bb280749196c8ffbe47be5b78f95f5cd
+-- hash: bfa9220264ac648ad4f9ca5121a2869da356358e46cce9d0fb8a8829987f471e
 
 name:           STV-Stack
 version:        0.1.0.0
@@ -29,7 +29,8 @@ library
   exposed-modules:
       Lib
       CleanVotes.Clean
-      AlternativeVote.Alternative
+      CountVotes.STV
+      CountVotes.Alternative
   hs-source-dirs:
       src
   build-depends:

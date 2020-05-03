@@ -1,7 +1,8 @@
 module Main where
 
 import CleanVotes.Clean
-import AlternativeVote.Alternative
+import CountVotes.STV
+import CountVotes.Alternative
 
 main :: IO ()
 main = do
@@ -9,6 +10,7 @@ main = do
     csvData <- readFile "votes.csv"
     let formatted = parseRawVotes csvData
     let cleanedVotes = finalVotes formatted
+    let cans = candidates formatted
 
     putStrLn "Please Select A Voting System:\n"
     putStrLn "1) Alternative Vote"
@@ -19,5 +21,9 @@ main = do
         let altVoteWinner = startAlternativeVoting cleanedVotes
         print ("Winner is: " ++ altVoteWinner)
 
-    else if choice =="2" then putStrLn "Running STV"
+    else if choice =="2" then do
+        let votingPrefs = finalPrefs cleanedVotes cans
+        let electionResults = startElection votingPrefs 
+        print electionResults 
+
     else putStrLn "Please enter a valid option..."

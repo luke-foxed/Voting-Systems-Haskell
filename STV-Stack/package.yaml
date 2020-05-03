@@ -27,7 +27,8 @@ library:
   exposed-modules:
     - Lib
     - CleanVotes.Clean
-    - AlternativeVote.Alternative
+    - CountVotes.STV
+    - CountVotes.Alternative
   other-modules: []
   dependencies:
     - split
