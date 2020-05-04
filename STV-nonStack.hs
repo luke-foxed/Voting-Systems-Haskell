@@ -7,7 +7,7 @@ weight :: Int
 weight = 1000
 
 numSeats :: Int
-numSeats = 4
+numSeats = 3
 
 votes :: [[String]]
 votes = [
@@ -501,15 +501,18 @@ running = []
 -- run election without weights, if quota is met then move to elected and remove from contention, else eliminate the tail 
 startElection :: Int -> [String] -> [String] -> [(String, Int)] -> [String]
 startElection numSeats elected eliminated [] = elected
-startElection 0 _ _ _ = elected
+startElection 0 elected _ _ = elected
 startElection numSeats elected eliminated votes = 
     if snd (head votes) > quota then do
-        let weightFactor = calculateWeightFactor (snd (head firstPref) - quota) (finalVotes) (fst (head firstPref))
-        let surplus = calculateFinalSurplus (snd (head firstPref)) weightFactor
-        let recalculatedVotes = distributeSurplus firstPref surplus
-        startElection (numSeats - 1) (elected ++ [fst (head firstPref)]) (eliminated) (recalculatedVotes)
-    else 
-        startElection (numSeats) (elected) (eliminated ++ [fst (last firstPref)]) (removeCandidate firstPref (last firstPref)) 
+        let weightFactor = calculateWeightFactor (snd (head votes) - quota) (finalVotes) (fst (head votes))
+        let surplus = calculateFinalSurplus (snd (head votes)) weightFactor
+        let recalculatedVotes = distributeSurplus votes surplus
+        startElection (numSeats - 1) (elected ++ [fst (head recalculatedVotes)]) (eliminated) (recalculatedVotes)
+    else do
+        let weightFactor = calculateWeightFactor (snd (last votes)) (finalVotes) (fst (last votes))
+        let surplus = calculateFinalSurplus (snd (last votes)) weightFactor
+        let recalculatedVotes = distributeEliminated votes surplus
+        startElection (numSeats) (elected) (eliminated ++ [fst (last recalculatedVotes)]) (recalculatedVotes)
 
 calculateWeightFactor :: Int -> [[String]] -> String -> Double
 calculateWeightFactor surplus votes can = realToFrac(surplus) / realToFrac(calculateTransferable votes can)
@@ -523,12 +526,14 @@ calculateFinalSurplus :: Int -> Double -> Double
 calculateFinalSurplus votesRecieved weightFactor = realToFrac(votesRecieved) / (weightFactor)
 
 distributeSurplus :: [(String, Int)] -> Double -> [(String, Int)]
-distributeSurplus votes surplus = [(x,y+ round(surplus)) | (x,y ) <- [head (tail votes)]] ++  tail (tail votes)
+distributeSurplus votes surplus = [(x,y+ round(surplus)) | (x,y ) <- [head (tail votes)]] ++ tail (tail votes)
 
+distributeEliminated :: [(String, Int)] -> Double -> [(String, Int)]
+distributeEliminated votes surplus = [(x,y+ round(surplus)) | (x,y ) <- [head votes]] ++ removeCandidate (tail votes) (last votes)
 
-test1 = calculateWeightFactor (snd (head firstPref) - quota) (finalVotes) (fst (head firstPref))
-test2 = calculateFinalSurplus (snd (head firstPref)) test1
-test3 = distributeSurplus firstPref test2
+test1 = calculateWeightFactor (snd (last firstPref)) (finalVotes) (fst (last firstPref))
+test2 = calculateFinalSurplus (snd (last firstPref)) test1
+test3 = distributeEliminated firstPref test2
 
 
 
