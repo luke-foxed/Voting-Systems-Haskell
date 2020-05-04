@@ -474,23 +474,20 @@ removeCandidate allCans can = filter (/=can) allCans
 -- 3. If so, add to elected list. If greater than quota, distribute votes
 -- 4. Else, drop the tail of the list and repeat 
 
+firstPref :: [(String, Int)]
+firstPref = (votesRecieved (map head finalVotes))
 
--- WRONG WAY OF DOING IT, DOES NOT USE WEIGHTS
+-- secondPref :: [(String, Int)]
+-- secondPref = (votesRecieved (map (filter (/=[]) (map (drop 1) finalVotes))))
 
-firstPref :: (String, Int)
-firstPref = head (votesRecieved (map head finalVotes))
+-- thirdPref :: (String, Int)
+-- thirdPref = head (votesRecieved (map head (filter (/=[]) (map (drop 2) finalVotes))))
 
-secondPref :: (String, Int)
-secondPref = head (votesRecieved (map head  (filter (/=[]) (map (drop 1) finalVotes))))
+-- fourthPref :: (String, Int)
+-- fourthPref = head (votesRecieved (map head (filter (/=[]) (map (drop 3) finalVotes))))
 
-thirdPref :: (String, Int)
-thirdPref = head (votesRecieved (map head (filter (/=[]) (map (drop 2) finalVotes))))
-
-fourthPref :: (String, Int)
-fourthPref = head (votesRecieved (map head (filter (/=[]) (map (drop 3) finalVotes))))
-
-finalPrefs :: [(String, Int)]
-finalPrefs = [firstPref] ++ [secondPref] ++ [thirdPref] ++ [fourthPref]
+-- finalPrefs :: [(String, Int)]
+-- finalPrefs = [firstPref] ++ [secondPref] ++ [thirdPref] ++ [fourthPref]
 
 elected :: [String]
 elected = []
@@ -498,19 +495,45 @@ elected = []
 eliminated :: [String]
 eliminated = []
 
+running :: [(String, Int)]
+running = []
+
 -- run election without weights, if quota is met then move to elected and remove from contention, else eliminate the tail 
 startElection :: Int -> [String] -> [String] -> [(String, Int)] -> [String]
-startElection _ _ _ [] = elected
+startElection numSeats elected eliminated [] = elected
 startElection 0 _ _ _ = elected
-startElection numSeats elected eliminated finalPrefs = 
-    if snd (head finalPrefs) > quota then 
-        startElection (numSeats - 1) (elected ++ [fst (head finalPrefs)]) (eliminated) (drop 1 (finalPrefs))
+startElection numSeats elected eliminated votes = 
+    if snd (head votes) > quota then do
+        let weightFactor = calculateWeightFactor (snd (head firstPref) - quota) (finalVotes) (fst (head firstPref))
+        let surplus = calculateFinalSurplus (snd (head firstPref)) weightFactor
+        let recalculatedVotes = distributeSurplus firstPref surplus
+        startElection (numSeats - 1) (elected ++ [fst (head firstPref)]) (eliminated) (recalculatedVotes)
     else 
-        startElection (numSeats) (elected) (eliminated ++ [fst (last finalPrefs)]) (removeCandidate finalPrefs (last finalPrefs)) 
+        startElection (numSeats) (elected) (eliminated ++ [fst (last firstPref)]) (removeCandidate firstPref (last firstPref)) 
 
-calculateWeightFactor :: Double -> [[String]] -> String -> Double
-calculateWeightFactor surplus votes can = surplus / realToFrac(calculateTransferable votes can)
+calculateWeightFactor :: Int -> [[String]] -> String -> Double
+calculateWeightFactor surplus votes can = realToFrac(surplus) / realToFrac(calculateTransferable votes can)
 
--- if there are no other candidates in a list AFTER the current candidate, they have no transferable 
+-- if there are no other candidates in a list AFTER the current candidate, they have no transferable votes
 calculateTransferable :: [[String]] -> String -> Int
 calculateTransferable votes can = length ([x | x <- votes, head x == can && length (tail x) /= 0])
+
+-- calculate how much votes the next candidate should have after redistributing the surplus
+calculateFinalSurplus :: Int -> Double -> Double
+calculateFinalSurplus votesRecieved weightFactor = realToFrac(votesRecieved) / (weightFactor)
+
+distributeSurplus :: [(String, Int)] -> Double -> [(String, Int)]
+distributeSurplus votes surplus = [(x,y+ round(surplus)) | (x,y ) <- [head (tail votes)]] ++  tail (tail votes)
+
+
+test1 = calculateWeightFactor (snd (head firstPref) - quota) (finalVotes) (fst (head firstPref))
+test2 = calculateFinalSurplus (snd (head firstPref)) test1
+test3 = distributeSurplus firstPref test2
+
+
+
+test4 :: [(String, Int)] -> [(String, Int)]
+test4 votes = 
+    if snd (head votes) > quota then do
+        votes
+    else [("FAILED", 2)]
