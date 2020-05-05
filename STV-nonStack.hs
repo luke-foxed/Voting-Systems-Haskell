@@ -1,13 +1,14 @@
 import Data.List(sort,maximumBy,elemIndex)
 import Data.Ord(comparing)
 import Data.Maybe
+import Debug.Trace
 
 -- temp hard code available seats 
 weight :: Int
 weight = 1000
 
 numSeats :: Int
-numSeats = 3
+numSeats = 4
 
 votes :: [[String]]
 votes = [
@@ -475,7 +476,7 @@ removeCandidate allCans can = filter (/=can) allCans
 -- 4. Else, drop the tail of the list and repeat 
 
 firstPref :: [(String, Int)]
-firstPref = (votesRecieved (map head finalVotes))
+firstPref = votesRecieved (map head finalVotes)
 
 -- secondPref :: [(String, Int)]
 -- secondPref = (votesRecieved (map (filter (/=[]) (map (drop 1) finalVotes))))
@@ -489,41 +490,48 @@ firstPref = (votesRecieved (map head finalVotes))
 -- finalPrefs :: [(String, Int)]
 -- finalPrefs = [firstPref] ++ [secondPref] ++ [thirdPref] ++ [fourthPref]
 
-elected :: [String]
+elected :: [(String, Int)]
 elected = []
 
-eliminated :: [String]
+eliminated :: [(String, Int)]
 eliminated = []
 
-running :: [(String, Int)]
-running = []
-
 -- run election without weights, if quota is met then move to elected and remove from contention, else eliminate the tail 
-startElection :: Int -> [String] -> [String] -> [(String, Int)] -> [String]
-startElection numSeats elected eliminated [] = elected
-startElection 0 elected _ _ = elected
+startElection :: Int -> [(String, Int)] -> [(String, Int)] -> [(String, Int)] -> IO()
+startElection numSeats elected eliminated [] = print elected
+startElection 0 elected _ _ = print elected
 startElection numSeats elected eliminated votes = 
     if snd (head votes) > quota then do
         let weightFactor = calculateWeightFactor (snd (head votes) - quota) (finalVotes) (fst (head votes))
-        let surplus = calculateFinalSurplus (snd (head votes)) weightFactor
-        let recalculatedVotes = distributeSurplus votes surplus
-        startElection (numSeats - 1) (elected ++ [fst (head recalculatedVotes)]) (eliminated) (recalculatedVotes)
+        -- let surplus = calculateFinalSurplus (snd (head votes)) weightFactor
+        let recalculatedVotes = recalculateAllVotes votes weightFactor
+
+        putStrLn "\nWEIGHT FACTOR --> " 
+        print weightFactor 
+
+        putStrLn "\nRECALCUALTED VOTES --> " 
+        print recalculatedVotes
+
+        startElection (numSeats - 1) (elected ++ [head votes]) eliminated recalculatedVotes
     else do
+
+        print $ (head votes , "IS NOT ELECTED")
+
         let weightFactor = calculateWeightFactor (snd (last votes)) (finalVotes) (fst (last votes))
         let surplus = calculateFinalSurplus (snd (last votes)) weightFactor
         let recalculatedVotes = distributeEliminated votes surplus
-        startElection (numSeats) (elected) (eliminated ++ [fst (last recalculatedVotes)]) (recalculatedVotes)
+        startElection (numSeats) (elected) (eliminated ++ [(last votes)]) (recalculatedVotes)
 
 calculateWeightFactor :: Int -> [[String]] -> String -> Double
 calculateWeightFactor surplus votes can = realToFrac(surplus) / realToFrac(calculateTransferable votes can)
 
 -- if there are no other candidates in a list AFTER the current candidate, they have no transferable votes
 calculateTransferable :: [[String]] -> String -> Int
-calculateTransferable votes can = length ([x | x <- votes, head x == can && length (tail x) /= 0])
+calculateTransferable votes can = length ([x | x <- votes, x /= [] && head x == can && length (tail x) == 0])
 
 -- calculate how much votes the next candidate should have after redistributing the surplus
 calculateFinalSurplus :: Int -> Double -> Double
-calculateFinalSurplus votesRecieved weightFactor = realToFrac(votesRecieved) / (weightFactor)
+calculateFinalSurplus votesRecieved weightFactor = (realToFrac(votesRecieved) / (weightFactor)) - realToFrac(votesRecieved)
 
 distributeSurplus :: [(String, Int)] -> Double -> [(String, Int)]
 distributeSurplus votes surplus = [(x,y+ round(surplus)) | (x,y ) <- [head (tail votes)]] ++ tail (tail votes)
@@ -535,10 +543,20 @@ test1 = calculateWeightFactor (snd (last firstPref)) (finalVotes) (fst (last fir
 test2 = calculateFinalSurplus (snd (last firstPref)) test1
 test3 = distributeEliminated firstPref test2
 
+recalculateAllVotes :: [(String, Int)] -> Double -> [(String, Int)]
+recalculateAllVotes votes weightFactor = [(x, round ((realToFrac y) / weightFactor)) | (x,y) <- tail votes]
 
+-- to do --> fix calculating transferable votes
+-- drop from list until candidate is head of that list
+-- ensure the tail of this new list is not null
 
-test4 :: [(String, Int)] -> [(String, Int)]
-test4 votes = 
-    if snd (head votes) > quota then do
-        votes
-    else [("FAILED", 2)]
+getIndex :: String -> [Int]
+getIndex can = map (fromMaybe 0 . (can `elemIndex`)) finalVotes
+
+-- test4 = map (getIndex "D. Milliband") finalVotes
+reassembleVotes :: [Int] -> [[String]]-> [[String]]
+reassembleVotes indexes votes = zipWith (drop) (indexes) (votes)
+
+test4 = getIndex "D. Milliband"
+test5 = reassembleVotes test4 finalVotes
+test6 = calculateTransferable test5 "D. Milliband"
