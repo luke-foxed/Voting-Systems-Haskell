@@ -22,12 +22,10 @@ main = do
         print $ "Winner is: " ++ altVoteWinner
 
     else if choice =="2" then do
-        let votingPrefs = finalPrefs cleanedVotes cans
-        let electionResults = startElection votingPrefs 
+        let votingPrefs = firstPref cleanedVotes cans
+        let electionResults = startElection votingPrefs cleanedVotes
+        
         print electionResults 
-
-        putStrLn "\n(Winner from each round):\n"
-        print $ finalPrefs cleanedVotes cans
 
     else do
         putStrLn "\nPlease enter a valid option...\n"

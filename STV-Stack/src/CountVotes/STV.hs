@@ -3,67 +3,65 @@ module CountVotes.STV where
 import CleanVotes.Clean
 import Types
 
--- votesLength :: SortedVotes -> Int
--- votesLength votes = length votes
-
 weight :: Double
-weight = 1000
+weight = 1.0
 
 numSeats :: Int
 numSeats = 4
 
-quota :: SortedVotes -> Int
-quota votes = ((length votes) `div` (numSeats + 1)) + 1
+quota :: SortedVotes -> Double
+quota votes = ((realToFrac(length votes)) / realToFrac(numSeats + 1)) + 1
 
 groupPref :: SortedVotes -> [String]
 groupPref votes = map head votes
 
 -- get tuple of candidate and vote (modified from https://codereview.stackexchange.com/questions/88720/return-list-with-numbers-of-color-occurrences-in-another-list)
 votesRecieved :: Candidates -> [String] -> [VotesRecieved]
-votesRecieved candidates xs = reverse (isort (zip candidates (map (\x -> length (filter (== x) xs)) candidates)))
+votesRecieved candidates xs = reverse (isort (zip candidates (map (\x -> realToFrac(length (filter (== x) xs))) candidates)))
 
 removeCandidate :: [VotesRecieved] -> VotesRecieved -> [VotesRecieved]
 removeCandidate allCans can = filter (/=can) allCans
 
--- steps for recursion
--- 1. Pass in canididate votes recieved
--- 2. Take head of that list and work out if quota is matched 
--- 3. If so, add to elected list. If greater than quota, distribute votes
--- 4. Else, drop the tail of the list and repeat 
+firstPref :: SortedVotes -> Candidates -> [VotesRecieved]
+firstPref votes cans = votesRecieved cans (map head votes)
 
-
--- WRONG WAY OF DOING IT, DOES NOT USE WEIGHTS
-
-firstPref :: SortedVotes -> Candidates -> VotesRecieved
-firstPref votes cans = head (votesRecieved cans (map head votes))
-
-secondPref :: SortedVotes -> Candidates -> VotesRecieved
-secondPref votes cans = head (votesRecieved cans (map head (filter (/=[]) (map (drop 1) votes))))
-
-thirdPref :: SortedVotes -> Candidates -> VotesRecieved
-thirdPref votes cans = head (votesRecieved cans (map head (filter (/=[]) (map (drop 2) votes))))
-
-fourthPref :: SortedVotes -> Candidates -> VotesRecieved
-fourthPref votes cans = head (votesRecieved cans (map head (filter (/=[]) (map (drop 3) votes))))
-
-finalPrefs :: SortedVotes -> Candidates -> [VotesRecieved]
-finalPrefs votes cans = [firstPref votes cans] ++ [secondPref votes cans] ++ [thirdPref votes cans] ++ [fourthPref votes cans]
-
-elected :: [String]
+elected :: [(String, Double)]
 elected = []
 
-eliminated :: [String]
+eliminated :: [(String, Double)]
 eliminated = []
 
-runElection :: Int -> [String] -> [String] -> [VotesRecieved] -> [String]
-runElection numSeats elected eliminated [] = elected
-runElection 0 elected eliminated votingPrefs = elected
-runElection numSeats elected eliminated votingPrefs = 
-    if snd (head votingPrefs) > 50 then 
-        runElection (numSeats - 1) (elected ++ [fst (head votingPrefs)]) (eliminated) (drop 1 (votingPrefs))
-    else 
-        runElection (numSeats) (elected) (eliminated ++ [fst (last votingPrefs)]) (removeCandidate votingPrefs (last votingPrefs))
+calculateWeightFactor :: Double -> Double -> Double -> Double -> [[String]] -> Double
+calculateWeightFactor oldWeight votesRecieved surplus nonTransferableCount votes = oldWeight * (realToFrac(surplus) / (oldWeight * (votesRecieved - nonTransferableCount )))
 
-startElection :: [VotesRecieved] -> [String]
-startElection votingPrefs = runElection numSeats elected eliminated votingPrefs
+-- if there are no other candidates in a list AFTER the current candidate, they have no transferable votes
+calculateTotalNonTransferable :: [[String]] -> String -> Int
+calculateTotalNonTransferable votes can = length ([x | x <- votes, x /= [] && head x == can && length (tail x) == 0])
 
+-- work out transferable count for inputted candidate
+calculateSurplusPerCandidate :: [[String]] -> String -> String -> Int
+calculateSurplusPerCandidate votes currentCan nextCan = length ([x | x <- votes, tail x /= [] && head x == currentCan && head (tail x) == nextCan])
+
+applySurplus :: [Double] -> [VotesRecieved] -> [VotesRecieved]
+applySurplus surpluses votes = zip (map fst votes) (zipWith (+) surpluses (map snd votes))
+
+-- run election without weights, if quota is met then move to elected and remove from contention, else eliminate the tail 
+runElection :: Double -> Int -> [(String, Double)] -> [(String, Double)] -> [VotesRecieved] -> SortedVotes -> [(String, Double)]
+runElection weight numSeats elected eliminated [] _ = elected
+runElection weight 0 elected _ _ _ = elected
+runElection weight numSeats elected eliminated firstPrefs allVotes = 
+    if realToFrac(snd (head firstPrefs)) > 10 then do
+        let nonTransferableVotes = calculateTotalNonTransferable allVotes (fst (head firstPrefs))
+        let weightFactor = calculateWeightFactor weight (realToFrac (snd (head firstPrefs))) (realToFrac (snd (head firstPrefs)) - quota (allVotes)) (realToFrac nonTransferableVotes) allVotes
+        let surplusForEach = [y | x <- filter (/= fst (head firstPrefs)) (map fst firstPrefs), let y = realToFrac (calculateSurplusPerCandidate allVotes (fst (head firstPrefs)) x)]
+        let adjustedSurplus = map (*weightFactor) surplusForEach
+        let updatedPrefs = applySurplus adjustedSurplus (tail firstPrefs)
+
+        runElection weightFactor (numSeats - 1) (elected ++ [head firstPrefs]) eliminated updatedPrefs allVotes
+
+    else
+
+        runElection weight numSeats elected (eliminated ++ [last firstPrefs]) firstPrefs allVotes
+
+startElection :: [VotesRecieved] -> [[String]] -> [(String, Double)]
+startElection = runElection weight numSeats elected eliminated
