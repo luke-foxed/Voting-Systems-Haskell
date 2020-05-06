@@ -8,7 +8,7 @@ weight :: Double
 weight = 1.0
 
 numSeats :: Int
-numSeats = 3
+numSeats = 4
 
 votes :: [[String]]
 votes = [
@@ -543,28 +543,27 @@ eliminated = []
 -- drop from list until candidate is head of that list
 -- ensure the tail of this new list is not null
 
--- getIndex :: String -> String -> [Int]
--- getIndex currentCan nextCan = map (fromMaybe 0 . (nextCan `elemIndex`)) (filterVotes currentCan nextCan finalVotes)
+getIndex :: String -> String -> [Int]
+getIndex currentCan nextCan = map (fromMaybe 0 . (nextCan `elemIndex`)) (filterVotes currentCan nextCan finalVotes)
 
--- filterVotes :: String -> String -> [[String]] -> [[String]]
--- filterVotes currentCan nextCan votes = [x | x <- votes, currentCan `elem` x && nextCan `elem` x]
+filterVotes :: String -> String -> [[String]] -> [[String]]
+filterVotes currentCan nextCan votes = [x | x <- votes, currentCan `elem` x && nextCan `elem` x]
 
--- -- test4 = map (getIndex "D. Milliband") finalVotes
--- reassembleVotes :: [Int] -> [[String]]-> [[String]]
--- reassembleVotes indexes votes = zipWith (drop) (indexes) (votes)
+reassembleVotes :: [Int] -> [[String]]-> [[String]]
+reassembleVotes indexes votes = zipWith (drop) (indexes) (votes)
 
--- test4 = getIndex "D. Milliband" "E. Milliband"
--- test5 = filter (/=[]) (reassembleVotes test4 (filterVotes "D. Milliband" "E. Milliband" finalVotes))
--- test6 = calculateTotalNonTransferable test5 "E. Milliband"
+test4 = getIndex "D. Milliband" "E. Milliband"
+test5 = filter (/=[]) (reassembleVotes test4 (filterVotes "D. Milliband" "E. Milliband" finalVotes))
+test6 = calculateTransferable test5 "D. Milliband"
 
 -----------
 
-calculateWeightFactor :: Double -> Double -> Double -> Double -> [[String]] -> Double
-calculateWeightFactor oldWeight votesRecieved surplus nonTransferableCount votes = oldWeight * (realToFrac(surplus) / (oldWeight * (votesRecieved - nonTransferableCount )))
+calculateWeightFactor :: Double -> Double -> Double -> Double
+calculateWeightFactor oldWeight surplus transferableVotes = oldWeight * (realToFrac surplus / (oldWeight * transferableVotes))
 
 -- if there are no other candidates in a list AFTER the current candidate, they have no transferable votes
-calculateTotalNonTransferable :: [[String]] -> String -> Int
-calculateTotalNonTransferable votes can = length ([x | x <- votes, x /= [] && head x == can && length (tail x) == 0])
+calculateTransferable :: [[String]] -> String -> Int
+calculateTransferable votes can = length ([x | x <- votes, x /= [] && head x == can && not (null (tail x))])
 
 -- work out transferable count for inputted candidate
 calculateSurplusPerCandidate :: [[String]] -> String -> String -> Int
@@ -576,7 +575,7 @@ calculateSurplusPerCandidate votes currentCan nextCan = length ([x | x <- votes,
 -- redistributeVotes :: [(String, Int)] -> Double -> Double -> [(String, Int)]
 -- redistributeVotes votes transferableVotes weightFactor = [(x, y+ round(transferableVotes * weightFactor)) | (x,y ) <- tail votes]
 
--- test7 = realToFrac (calculateTotalNonTransferable finalVotes "D. Milliband")
+-- test7 = realToFrac (calculateTransferable finalVotes "D. Milliband")
 -- test8 = calculateWeightFactor weight 111 43.5 test7 finalVotes
 -- test9 = redistributeVotes firstPref 40 test8
 -- test10 = zipWith (zipWith (+)) [1,2,3,4] [("D. Abbott",2),("E. Balls",18),("A. Burbhm",17),("E. Milliband",40)]
@@ -595,18 +594,20 @@ startElection weight numSeats elected eliminated [] = print elected
 startElection weight 0 elected _ _ = print elected
 startElection weight numSeats elected eliminated votes = 
     if realToFrac(snd (head votes)) > 10 then do
-        let nonTransferableVotes = calculateTotalNonTransferable finalVotes (fst (head votes))
-        let weightFactor = calculateWeightFactor weight (realToFrac (snd (head votes))) (realToFrac (snd (head votes)) - quota) (realToFrac nonTransferableVotes) finalVotes
+        let transferable = calculateTransferable finalVotes (fst (head votes))
+        let weightFactor = calculateWeightFactor weight (realToFrac (snd (head votes)) - quota) (realToFrac transferable)
         let surplusForEach = [y | x <- filter (/= fst (head votes)) (map fst votes), let y = realToFrac (calculateSurplusPerCandidate finalVotes (fst (head votes)) x)]
         let adjustedSurplus = map (*weightFactor) surplusForEach
         let updatedVotes = applySurplus adjustedSurplus (tail votes)
 
-
         -- putStrLn "\nCURRENT VOTES --> " 
         -- print votes 
 
-        putStrLn $ "\nNON TRANSFERABLE VOTES OF " ++ fst (head votes)
-        print nonTransferableVotes 
+        putStrLn $ "\nTRANSFERABLE VOTES OF: " ++ fst (head votes)
+        print transferable 
+
+        putStrLn "\nSURPLUS --> " 
+        print (realToFrac (snd (head votes)) - quota) 
 
         putStrLn "\nWEIGHT FACTOR --> " 
         print weightFactor 
@@ -627,3 +628,137 @@ startElection weight numSeats elected eliminated votes =
         print $ (head votes , "IS NOT ELECTED")
         
         -- startElection weight (numSeats) (elected) (eliminated ++ [(last votes)]) (votes)
+
+
+---------------------------
+
+debugVotes ::[[String]]
+debugVotes = [
+    [ "D. Abbott"],["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],
+    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],["A. Burbhm","D. Milliband","E. Milliband"],
+    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],["D. Milliband","E. Milliband"],
+    ["E. Balls","E. Milliband","D. Milliband","A. Burbhm","D. Abbott"],
+    ["E. Balls","D. Milliband","A. Burbhm","E. Milliband","D. Abbott"],
+    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm"],
+    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["E. Balls"],["D. Milliband","E. Milliband","E. Balls","A. Burbhm"],
+    ["A. Burbhm","E. Milliband","D. Milliband","E. Balls","D. Abbott"],
+    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["E. Milliband"],["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["D. Milliband","E. Balls"],["E. Milliband","D. Milliband"],
+    ["A. Burbhm","D. Milliband","E. Milliband","E. Balls"],["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["A. Burbhm","E. Milliband"],["E. Milliband","A. Burbhm"],["A. Burbhm","D. Milliband","E. Balls","E. Milliband"],
+    ["E. Balls","D. Milliband"],["E. Milliband"],["A. Burbhm","D. Milliband"],["D. Milliband"],
+    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm","D. Abbott"],["E. Balls","E. Milliband","D. Milliband"],
+    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm"],["D. Milliband","E. Balls","A. Burbhm","E. Milliband","D. Abbott"],
+    ["E. Milliband"],["D. Milliband","E. Milliband","E. Balls"],
+    ["A. Burbhm","D. Milliband","E. Milliband","E. Balls","D. Abbott"],
+    ["D. Milliband","E. Balls","E. Milliband"],["D. Milliband"],["D. Milliband","A. Burbhm"],["A. Burbhm","E. Milliband"],
+    ["D. Milliband","E. Milliband"],["E. Milliband","D. Abbott","E. Balls"],["D. Milliband"],
+    ["D. Abbott","E. Balls","E. Milliband","A. Burbhm","D. Milliband"],
+    ["D. Milliband","A. Burbhm","D. Abbott","E. Milliband","E. Balls"],["D. Milliband"],
+    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm"],
+    ["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],
+    ["A. Burbhm","E. Balls","E. Milliband","D. Milliband","D. Abbott"],
+    ["D. Milliband","E. Balls"],["E. Balls"],["D. Abbott","E. Milliband"],
+    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm","D. Abbott"],
+    ["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],
+    ["D. Milliband","E. Milliband"],
+    ["D. Milliband","E. Balls","E. Milliband","D. Abbott","A. Burbhm"],
+    ["E. Milliband","E. Balls","D. Milliband","A. Burbhm","D. Abbott"],
+    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm","D. Abbott"],["E. Balls","E. Milliband","D. Milliband","A. Burbhm"],
+    ["E. Milliband","D. Milliband","A. Burbhm","E. Balls","D. Abbott"],
+    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],["D. Milliband"],["D. Milliband"],
+    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["E. Balls","E. Milliband","D. Milliband","A. Burbhm","D. Abbott"],["E. Milliband","D. Milliband","E. Balls"],
+    ["D. Milliband","E. Milliband"],["E. Milliband"],["E. Balls","E. Milliband"],["E. Milliband","E. Balls"],
+    ["A. Burbhm","D. Milliband","E. Milliband","E. Balls"],["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm"],["D. Milliband"],
+    ["D. Milliband","E. Milliband","E. Balls","D. Abbott","A. Burbhm"],["E. Milliband"],["E. Balls","E. Milliband"],
+    ["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],["E. Milliband"],
+    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],["D. Milliband","A. Burbhm","E. Milliband"],
+    ["D. Milliband","A. Burbhm"],["E. Milliband"],["E. Milliband","A. Burbhm","D. Milliband","E. Balls","D. Abbott"],
+    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm"],["E. Milliband","D. Milliband","A. Burbhm","E. Balls","D. Abbott"],
+    ["E. Milliband","A. Burbhm"],["D. Milliband"],["A. Burbhm","D. Milliband","E. Milliband"],["D. Milliband"],
+    ["D. Milliband","A. Burbhm","D. Abbott","E. Balls","E. Milliband"],["A. Burbhm","D. Milliband"],["E. Milliband","E. Balls"],
+    ["D. Milliband","A. Burbhm","E. Balls","E. Milliband","D. Abbott"],["D. Milliband","E. Milliband"],
+    ["D. Milliband","E. Milliband","A. Burbhm","D. Abbott","E. Balls"],
+    ["D. Milliband","E. Balls","A. Burbhm","E. Milliband","D. Abbott"],
+    ["D. Milliband","A. Burbhm","E. Milliband","E. Balls","D. Abbott"],
+    ["E. Milliband","D. Milliband","A. Burbhm","E. Balls","D. Abbott"],["A. Burbhm","D. Milliband"],["E. Milliband"],
+    ["E. Milliband","D. Milliband","A. Burbhm","E. Balls"],["E. Balls","E. Milliband","A. Burbhm","D. Milliband","D. Abbott"],
+    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],["E. Balls","E. Milliband","D. Milliband"],
+    ["E. Balls","E. Milliband","D. Milliband","A. Burbhm","D. Abbott"],["E. Milliband","D. Milliband"],
+    ["E. Milliband","E. Balls","A. Burbhm","D. Milliband"],["D. Milliband","E. Milliband","A. Burbhm","E. Balls"],
+    ["D. Milliband","A. Burbhm","E. Milliband","E. Balls","D. Abbott"],["D. Milliband"],["E. Milliband","E. Balls"],
+    ["E. Balls","E. Milliband"],["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],["E. Balls","D. Milliband"],
+    ["A. Burbhm","E. Milliband","D. Milliband","E. Balls","D. Abbott"],["D. Milliband","E. Balls","A. Burbhm"],
+    ["A. Burbhm","D. Milliband","E. Milliband","E. Balls","D. Abbott"],["D. Milliband"],["E. Milliband","E. Balls"],
+    ["E. Balls","A. Burbhm","E. Milliband","D. Milliband","D. Abbott"],["A. Burbhm","E. Milliband","D. Milliband"],
+    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["E. Milliband","E. Balls","D. Milliband","A. Burbhm","D. Abbott"],
+    ["D. Abbott","E. Milliband","E. Balls","A. Burbhm","D. Milliband"],
+    ["D. Milliband","E. Balls"],["D. Milliband","E. Milliband"],["E. Balls","E. Milliband","D. Milliband"],
+    ["E. Milliband","D. Milliband","A. Burbhm"],["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],
+    ["D. Milliband","A. Burbhm","E. Milliband","E. Balls"],["E. Milliband","E. Balls"],
+    ["E. Milliband","A. Burbhm","D. Milliband","E. Balls","D. Abbott"],["D. Milliband"],["E. Balls","D. Milliband"],
+    ["E. Milliband","E. Balls","A. Burbhm","D. Milliband"],["E. Balls","E. Milliband","D. Milliband"],
+    ["D. Milliband","A. Burbhm"],["E. Milliband","D. Milliband"],
+    ["D. Milliband","A. Burbhm","E. Milliband","D. Abbott","E. Balls"],
+    ["E. Balls","E. Milliband","A. Burbhm","D. Milliband","D. Abbott"],["D. Milliband","E. Milliband","A. Burbhm","E. Balls"],
+    ["E. Balls","E. Milliband","D. Milliband","A. Burbhm","D. Abbott"],
+    ["A. Burbhm","E. Milliband","D. Milliband","E. Balls","D. Abbott"],["D. Milliband"],["E. Milliband"],
+    ["D. Milliband","D. Abbott","E. Balls","E. Milliband","A. Burbhm"],["E. Milliband","A. Burbhm"],["E. Milliband"],
+    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm","D. Abbott"],["D. Milliband"],
+    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["E. Milliband","E. Balls","D. Milliband","A. Burbhm","D. Abbott"],["D. Milliband"],["D. Milliband","E. Balls"],
+    ["E. Balls","E. Milliband","D. Abbott","D. Milliband","A. Burbhm"],["E. Milliband"],["D. Milliband","E. Milliband"],
+    ["E. Milliband","D. Milliband","A. Burbhm","E. Balls"],["D. Milliband"],["E. Milliband"],
+    ["E. Balls","E. Milliband","D. Milliband"],["D. Milliband"],["E. Milliband","D. Milliband","A. Burbhm"],
+    ["E. Balls","D. Milliband"],["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],["D. Milliband"],
+    ["D. Abbott"],["D. Milliband"],["D. Milliband","A. Burbhm","E. Milliband","E. Balls","D. Abbott"],["E. Milliband"],
+    ["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],["E. Milliband","E. Balls"],["E. Milliband"],
+    ["E. Milliband","D. Abbott"],["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],
+    ["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],["D. Milliband","E. Milliband"],
+    ["E. Milliband","D. Milliband"],["A. Burbhm","D. Milliband","E. Milliband","E. Balls"],
+    ["E. Milliband","D. Milliband","E. Balls","D. Abbott","A. Burbhm"],["E. Milliband","E. Balls"],["D. Milliband"],
+    ["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],["E. Milliband"],
+    ["E. Milliband","A. Burbhm","E. Balls","D. Abbott","D. Milliband"],["E. Balls","E. Milliband"],["D. Milliband"],
+    ["D. Milliband"],["E. Milliband","D. Milliband"],["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["E. Milliband","E. Balls"],["D. Milliband"],["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],
+    ["E. Milliband","D. Milliband","D. Abbott"],["E. Milliband"],["E. Milliband","A. Burbhm","D. Milliband","E. Balls"],
+    ["E. Balls","E. Milliband","D. Milliband"],["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],
+    ["D. Milliband"],["E. Milliband","A. Burbhm","D. Milliband","E. Balls"],["E. Milliband"],["D. Milliband"],
+    ["D. Milliband"],["D. Milliband","E. Milliband","A. Burbhm","E. Balls"],
+    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],["D. Milliband","E. Milliband"],
+    ["D. Abbott","E. Milliband"],["E. Balls","E. Milliband","D. Milliband","A. Burbhm","D. Abbott"],
+    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm","D. Abbott"],["A. Burbhm","E. Milliband"],
+    ["D. Milliband"],["E. Milliband","E. Balls","D. Milliband"],
+    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],["E. Milliband"],
+    ["D. Milliband","E. Milliband"],["E. Milliband"],["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["D. Milliband"],["E. Milliband"],["E. Milliband","E. Balls"],["A. Burbhm","E. Milliband"],
+    ["E. Milliband","D. Milliband","E. Balls"],["D. Milliband"],["D. Milliband"],["E. Milliband"],
+    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm","D. Abbott"],["D. Milliband","A. Burbhm"],
+    ["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],
+    ["E. Milliband","E. Balls","D. Milliband","A. Burbhm","D. Abbott"],
+    ["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],
+    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm"],["E. Milliband","D. Milliband","A. Burbhm","E. Balls","D. Abbott"],
+    ["D. Milliband","A. Burbhm","E. Balls"],["D. Milliband","A. Burbhm"],["D. Milliband"],
+    ["A. Burbhm","D. Milliband","E. Balls","E. Milliband","D. Abbott"],
+    ["D. Milliband","E. Balls","A. Burbhm","E. Milliband","D. Abbott"],["D. Milliband"],["E. Milliband"],
+    ["E. Milliband","D. Milliband","A. Burbhm","E. Balls"],["E. Balls","E. Milliband","D. Milliband","D. Abbott"],
+    ["A. Burbhm","D. Milliband","E. Milliband","E. Balls","D. Abbott"],
+    ["A. Burbhm","D. Milliband","E. Balls","E. Milliband","D. Abbott"],["D. Milliband","E. Milliband"],
+    ["E. Milliband","D. Milliband"],["E. Milliband","D. Milliband"],
+    ["D. Milliband","E. Milliband","E. Balls","D. Abbott","A. Burbhm"],["D. Milliband","D. Abbott","E. Milliband"],
+    ["E. Milliband","A. Burbhm"],["E. Balls","E. Milliband","A. Burbhm","D. Milliband","D. Abbott"],
+    ["A. Burbhm","E. Balls","E. Milliband","D. Abbott","D. Milliband"],["E. Milliband","A. Burbhm","D. Milliband"],
+    ["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],
+    ["E. Milliband","E. Balls","D. Milliband","A. Burbhm","D. Abbott"],["E. Milliband","D. Milliband"],
+    ["D. Milliband","A. Burbhm"],["D. Milliband"],["E. Milliband"],["D. Abbott","E. Milliband","E. Balls"],
+    ["D. Milliband","A. Burbhm","E. Milliband","E. Balls"],["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
+    ["D. Milliband"],["E. Balls","D. Milliband","E. Milliband","A. Burbhm"],
+    ["E. Balls","E. Milliband","A. Burbhm","D. Milliband","D. Abbott"]]

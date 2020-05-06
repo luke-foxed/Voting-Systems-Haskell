@@ -10,18 +10,13 @@ numSeats :: Int
 numSeats = 4
 
 quota :: SortedVotes -> Double
-quota votes = ((realToFrac(length votes)) / realToFrac(numSeats + 1)) + 1
-
-groupPref :: SortedVotes -> [String]
-groupPref votes = map head votes
+quota votes = realToFrac (length votes) / realToFrac (numSeats + 1)
 
 -- get tuple of candidate and vote (modified from https://codereview.stackexchange.com/questions/88720/return-list-with-numbers-of-color-occurrences-in-another-list)
 votesRecieved :: Candidates -> [String] -> [VotesRecieved]
 votesRecieved candidates xs = reverse (isort (zip candidates (map (\x -> realToFrac(length (filter (== x) xs))) candidates)))
 
-removeCandidate :: [VotesRecieved] -> VotesRecieved -> [VotesRecieved]
-removeCandidate allCans can = filter (/=can) allCans
-
+-- get count of first preference votes for each candidate
 firstPref :: SortedVotes -> Candidates -> [VotesRecieved]
 firstPref votes cans = votesRecieved cans (map head votes)
 
@@ -31,14 +26,15 @@ elected = []
 eliminated :: [(String, Double)]
 eliminated = []
 
-calculateWeightFactor :: Double -> Double -> Double -> Double -> [[String]] -> Double
-calculateWeightFactor oldWeight votesRecieved surplus nonTransferableCount votes = oldWeight * (realToFrac(surplus) / (oldWeight * (votesRecieved - nonTransferableCount )))
+-- calculate updated weight factor using old weight with the transferable and surplus votes of candidate
+calculateWeightFactor :: Double -> Double -> Double -> Double
+calculateWeightFactor oldWeight surplus transferableVotes = oldWeight * (realToFrac surplus / (oldWeight * transferableVotes))
 
 -- if there are no other candidates in a list AFTER the current candidate, they have no transferable votes
-calculateTotalNonTransferable :: [[String]] -> String -> Int
-calculateTotalNonTransferable votes can = length ([x | x <- votes, x /= [] && head x == can && length (tail x) == 0])
+calculateTransferable :: [[String]] -> String -> Int
+calculateTransferable votes can = length ([x | x <- votes, x /= [] && head x == can && not (null (tail x))])
 
--- work out transferable count for inputted candidate
+-- calculate exact number of votes from candidate x to go to candidate y (before applying weighting factor)
 calculateSurplusPerCandidate :: [[String]] -> String -> String -> Int
 calculateSurplusPerCandidate votes currentCan nextCan = length ([x | x <- votes, tail x /= [] && head x == currentCan && head (tail x) == nextCan])
 
@@ -50,9 +46,9 @@ runElection :: Double -> Int -> [(String, Double)] -> [(String, Double)] -> [Vot
 runElection weight numSeats elected eliminated [] _ = elected
 runElection weight 0 elected _ _ _ = elected
 runElection weight numSeats elected eliminated firstPrefs allVotes = 
-    if realToFrac(snd (head firstPrefs)) > 10 then do
-        let nonTransferableVotes = calculateTotalNonTransferable allVotes (fst (head firstPrefs))
-        let weightFactor = calculateWeightFactor weight (realToFrac (snd (head firstPrefs))) (realToFrac (snd (head firstPrefs)) - quota (allVotes)) (realToFrac nonTransferableVotes) allVotes
+    if realToFrac(snd (head firstPrefs)) > quota allVotes then do
+        let transferable = calculateTransferable allVotes (fst (head firstPrefs))
+        let weightFactor = calculateWeightFactor weight (realToFrac (snd (head firstPrefs)) - quota allVotes) (realToFrac transferable)
         let surplusForEach = [y | x <- filter (/= fst (head firstPrefs)) (map fst firstPrefs), let y = realToFrac (calculateSurplusPerCandidate allVotes (fst (head firstPrefs)) x)]
         let adjustedSurplus = map (*weightFactor) surplusForEach
         let updatedPrefs = applySurplus adjustedSurplus (tail firstPrefs)
@@ -60,7 +56,7 @@ runElection weight numSeats elected eliminated firstPrefs allVotes =
         runElection weightFactor (numSeats - 1) (elected ++ [head firstPrefs]) eliminated updatedPrefs allVotes
 
     else
-
+        -- need to distribute loosing votes here
         runElection weight numSeats elected (eliminated ++ [last firstPrefs]) firstPrefs allVotes
 
 startElection :: [VotesRecieved] -> [[String]] -> [(String, Double)]
