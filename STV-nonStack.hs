@@ -349,7 +349,7 @@ extractVotes = map rmEmptyVotes sortVotes
 
 -- remove asterix and vote number which isn't needed 
 rmEmptyVotes :: [(String, String)] -> [(String, String)]
-rmEmptyVotes vote = [(fst x, snd x) | x <- vote, snd x /= "*"]
+rmEmptyVotes vote = [x | x <- vote, snd x /= "*"]
 
 -- take from list until duplicate is encountered, modified from: https://stackoverflow.com/questions/28755554/taking-from-a-list-until-encountering-a-duplicate
 takeUntilDuplicate :: Eq a => [(String, a)] -> [(String, a)]
@@ -365,13 +365,6 @@ rmVoteTally = map fst
 readAsInt :: String -> Int
 readAsInt s = read s :: Int
 
--- takeUntilGap :: [(String, String)] -> [(String, String)]
--- takeUntilGap = helper []
---     where helper seen [] = seen
---           helper seen (x:xs)
---               | not (null seen) && snd x `elem` [show (readAsInt(snd (last seen)) - 1 )] = init seen
---               | otherwise = helper (seen ++ [x]) xs
-
 takeUntilGap :: [(String, String)] -> [(String, String)]
 takeUntilGap = helper []
     where helper seen [] = seen
@@ -380,7 +373,7 @@ takeUntilGap = helper []
               | otherwise = helper (seen ++ [x]) xs
 
 finalVotes :: [[String]]
-finalVotes =  map rmVoteTally (map takeUntilGap (map takeUntilDuplicate extractVotes))
+finalVotes =  map ((rmVoteTally . takeUntilGap) . takeUntilDuplicate) extractVotes
 ------------------------
 --  ALTERNATIVE VOTE  --
 ------------------------
@@ -419,6 +412,114 @@ startAlternativeVoting = getWinner finalVotes
 --      ST VOTE       --
 ------------------------
 
+zipWeights :: [[String]] -> Double -> [([String], Double)]
+zipWeights votes weight = [(x, weight) | x <- votes]
+
+groupPref :: [String]
+groupPref = map head finalVotes
+
+-- get tuple of candidate and vote (modified from https://codereview.stackexchange.com/questions/88720/return-list-with-numbers-of-color-occurrences-in-another-list)
+votesRecieved :: [String] -> [(String, Double)]
+votesRecieved xs = reverse (isort (zip candidates (map (\x -> realToFrac(length (filter (== x) xs))) candidates)))
+
+removeCandidate :: [(String, Double)] -> (String, Double) -> [(String, Double)]
+removeCandidate allCans can = filter (/=can) allCans
+
+firstPref :: [(String, Double)]
+firstPref = votesRecieved (map head finalVotes)
+
+elected :: [(String, Double)]
+elected = []
+
+eliminated :: [(String, Double)]
+eliminated = []
+
+getIndex :: String -> String -> [Int]
+getIndex currentCan nextCan = map (fromMaybe 0 . (nextCan `elemIndex`)) (filterVotes currentCan nextCan finalVotes)
+
+filterVotes :: String -> String -> [[String]] -> [[String]]
+filterVotes currentCan nextCan votes = [x | x <- votes, currentCan `elem` x && nextCan `elem` x]
+
+reassembleVotes :: [Int] -> [[String]]-> [[String]]
+reassembleVotes indexes votes = zipWith (drop) (indexes) (votes)
+test4 = getIndex "D. Milliband" "E. Milliband"
+test5 = filter (/=[]) (reassembleVotes test4 (filterVotes "D. Milliband" "E. Milliband" finalVotes))
+test6 = calculateTransferable test5 "D. Milliband"
+
+-----------
+
+calculateWeightFactor :: Double -> Double -> Double -> Double
+calculateWeightFactor oldWeight surplus transferableVotes = oldWeight * (realToFrac surplus / (oldWeight * transferableVotes))
+
+-- if there are no other candidates in a list AFTER the current candidate, they have no transferable votes
+calculateTransferable :: [[String]] -> String -> Int
+calculateTransferable votes can = length ([x | x <- votes, x /= [] && head x == can && not (null (tail x))])
+
+-- work out transferable count for inputted candidate
+calculateSurplusPerCandidate :: [[String]] -> String -> String -> Int
+calculateSurplusPerCandidate votes currentCan nextCan = length ([x | x <- votes, tail x /= [] && head x == currentCan && head (tail x) == nextCan])
+
+applySurplus :: [Double] -> [(String, Double)] -> [(String, Double)]
+applySurplus surpluses votes = zip (map fst votes) (zipWith (+) surpluses (map snd votes))
+
+-- run election without weights, if quota is met then move to elected and remove from contention, else eliminate the tail 
+startElection :: Double -> Int -> [(String, Double)] -> [(String, Double)] -> [(String, Double)] -> IO()
+startElection weight numSeats elected eliminated [] = print elected
+startElection weight 0 elected _ _ = print elected
+startElection weight numSeats elected eliminated votes = 
+    if realToFrac(snd (head votes)) > quota then do
+        let transferable = calculateTransferable finalVotes (fst (head votes))
+        let weightFactor = calculateWeightFactor weight (realToFrac (snd (head votes)) - quota) (realToFrac transferable)
+        let surplusForEach = [y | x <- filter (/= fst (head votes)) (map fst votes), let y = realToFrac (calculateSurplusPerCandidate finalVotes (fst (head votes)) x)]
+        let adjustedSurplus = map (*weightFactor) surplusForEach
+        let updatedVotes = applySurplus adjustedSurplus (tail votes)
+
+        putStrLn "\nCURRENT VOTES --> " 
+        print votes 
+
+        -- putStrLn $ "\nTRANSFERABLE VOTES OF: " ++ fst (head votes)
+        -- print transferable 
+
+        -- putStrLn "\nSURPLUS --> " 
+        -- print (realToFrac (snd (head votes)) - quota) 
+
+        -- putStrLn "\nWEIGHT FACTOR --> " 
+        -- print weightFactor 
+
+        -- putStrLn "\nSURPLUS VOTES --> " 
+        -- print adjustedSurplus 
+
+        -- putStrLn "\nUPDATED VOTES --> " 
+        -- print updatedVotes 
+
+        -- putStrLn "\nELECTING --> " 
+        -- print (head votes)
+
+        startElection weightFactor (numSeats - 1) (elected ++ [head votes]) eliminated updatedVotes
+    
+    else if numSeats==1 && length votes ==1 then
+        startElection weight (numSeats - 1) (elected ++ [head votes]) eliminated []
+
+    else do
+
+        let transferable = calculateTransferable finalVotes (fst (last votes))
+        let surplusForEach = [y | x <- filter (/= fst (last votes)) (map fst votes), let y = realToFrac (calculateSurplusPerCandidate finalVotes (fst (last votes)) x)]
+        let adjustedSurplus = map (*weight) surplusForEach
+        let updatedVotes = applySurplus adjustedSurplus (removeCandidate votes (last votes))
+
+        putStrLn "\nVOTES BEFORE ELIMINATION:"
+        print votes 
+
+        putStrLn "\nUPDATED VOTES OF ELIMINATED:"
+        print updatedVotes 
+        
+        startElection weight numSeats elected (eliminated ++ [last votes]) updatedVotes
+
+
+------------------------
+--      OLD CODE      --
+------------------------
+
 -- -- take first vote of sorted list of votes
 -- extractFirstVote:: [String] -> (String, [String])
 -- extractFirstVote (x:xs) = (x, xs)
@@ -452,75 +553,18 @@ startAlternativeVoting = getWinner finalVotes
 -- removeLoser :: [(String, Int)] -> [(String, Int)]
 -- removeLoser xs = tail xs
 
-------------------------
---     ST VOTE V2     --
-------------------------
+-- calculateSurplusPerCandidate :: [[String]] -> String -> String -> Int
+-- calculateSurplusPerCandidate votes currentCan nextCan = length ([x | x <- votes, tail x /= [] && head x == currentCan && nextCan `elem` [head (tail x)]])
 
-electedCandidates :: [(String, Int)]
-electedCandidates = []
+-- redistributeVotes :: [(String, Int)] -> Double -> Double -> [(String, Int)]
+-- redistributeVotes votes transferableVotes weightFactor = [(x, y+ round(transferableVotes * weightFactor)) | (x,y ) <- tail votes]
 
-groupPref :: [String]
-groupPref = map head finalVotes
+-- test7 = realToFrac (calculateTransferable finalVotes "D. Milliband")
+-- test8 = calculateWeightFactor weight 111 43.5 test7 finalVotes
+-- test9 = redistributeVotes firstPref 40 test8
+-- test10 = zipWith (zipWith (+)) [1,2,3,4] [("D. Abbott",2),("E. Balls",18),("A. Burbhm",17),("E. Milliband",40)]
 
--- get tuple of candidate and vote (modified from https://codereview.stackexchange.com/questions/88720/return-list-with-numbers-of-color-occurrences-in-another-list)
-votesRecieved :: [String] -> [(String, Double)]
-votesRecieved xs = reverse (isort (zip candidates (map (\x -> realToFrac(length (filter (== x) xs))) candidates)))
-
-removeCandidate :: [(String, Int)] -> (String, Int) -> [(String, Int)]
-removeCandidate allCans can = filter (/=can) allCans
-
--- steps for recursion
--- 1. Pass in canididate votes recieved
--- 2. Take head of that list and work out if quota is matched 
--- 3. If so, add to elected list. If greater than quota, distribute votes
--- 4. Else, drop the tail of the list and repeat 
-
-firstPref :: [(String, Double)]
-firstPref = votesRecieved (map head finalVotes)
-
--- secondPref :: [(String, Int)]
--- secondPref = (votesRecieved (map (filter (/=[]) (map (drop 1) finalVotes))))
-
--- thirdPref :: (String, Int)
--- thirdPref = head (votesRecieved (map head (filter (/=[]) (map (drop 2) finalVotes))))
-
--- fourthPref :: (String, Int)
--- fourthPref = head (votesRecieved (map head (filter (/=[]) (map (drop 3) finalVotes))))
-
--- finalPrefs :: [(String, Int)]
--- finalPrefs = [firstPref] ++ [secondPref] ++ [thirdPref] ++ [fourthPref]
-
-elected :: [(String, Double)]
-elected = []
-
-eliminated :: [(String, Double)]
-eliminated = []
-
--- run election without weights, if quota is met then move to elected and remove from contention, else eliminate the tail 
--- startElection :: Int -> [(String, Int)] -> [(String, Int)] -> [(String, Int)] -> IO()
--- startElection numSeats elected eliminated [] = print elected
--- startElection 0 elected _ _ = print elected
--- startElection numSeats elected eliminated votes = 
---     if snd (head votes) > quota then do
---         let weightFactor = calculateWeightFactor (snd (head votes) - quota) (finalVotes) (fst (head votes))
---         -- let surplus = calculateFinalSurplus (snd (head votes)) weightFactor
---         let recalculatedVotes = recalculateAllVotes votes weightFactor
-
---         putStrLn "\nWEIGHT FACTOR --> " 
---         print weightFactor 
-
---         putStrLn "\nRECALCUALTED VOTES --> " 
---         print recalculatedVotes
-
---         startElection (numSeats - 1) (elected ++ [head votes]) eliminated recalculatedVotes
---     else do
-
---         print $ (head votes , "IS NOT ELECTED")
-
---         let weightFactor = calculateWeightFactor (snd (last votes)) (finalVotes) (fst (last votes))
---         let surplus = calculateFinalSurplus (snd (last votes)) weightFactor
---         let recalculatedVotes = distributeEliminated votes surplus
---         startElection (numSeats) (elected) (eliminated ++ [(last votes)]) (recalculatedVotes)
+-- test13 surpluses votes = [y | x <- surpluses, let y = map (applySurplus x) votes]
 
 -- calculate how much votes the next candidate should have after redistributing the surplus
 -- calculateFinalSurplus :: Int -> Double -> Double
@@ -542,223 +586,3 @@ eliminated = []
 -- to do --> fix calculating transferable votes
 -- drop from list until candidate is head of that list
 -- ensure the tail of this new list is not null
-
-getIndex :: String -> String -> [Int]
-getIndex currentCan nextCan = map (fromMaybe 0 . (nextCan `elemIndex`)) (filterVotes currentCan nextCan finalVotes)
-
-filterVotes :: String -> String -> [[String]] -> [[String]]
-filterVotes currentCan nextCan votes = [x | x <- votes, currentCan `elem` x && nextCan `elem` x]
-
-reassembleVotes :: [Int] -> [[String]]-> [[String]]
-reassembleVotes indexes votes = zipWith (drop) (indexes) (votes)
-
-test4 = getIndex "D. Milliband" "E. Milliband"
-test5 = filter (/=[]) (reassembleVotes test4 (filterVotes "D. Milliband" "E. Milliband" finalVotes))
-test6 = calculateTransferable test5 "D. Milliband"
-
------------
-
-calculateWeightFactor :: Double -> Double -> Double -> Double
-calculateWeightFactor oldWeight surplus transferableVotes = oldWeight * (realToFrac surplus / (oldWeight * transferableVotes))
-
--- if there are no other candidates in a list AFTER the current candidate, they have no transferable votes
-calculateTransferable :: [[String]] -> String -> Int
-calculateTransferable votes can = length ([x | x <- votes, x /= [] && head x == can && not (null (tail x))])
-
--- work out transferable count for inputted candidate
-calculateSurplusPerCandidate :: [[String]] -> String -> String -> Int
-calculateSurplusPerCandidate votes currentCan nextCan = length ([x | x <- votes, tail x /= [] && head x == currentCan && head (tail x) == nextCan])
-
--- calculateSurplusPerCandidate :: [[String]] -> String -> String -> Int
--- calculateSurplusPerCandidate votes currentCan nextCan = length ([x | x <- votes, tail x /= [] && head x == currentCan && nextCan `elem` [head (tail x)]])
-
--- redistributeVotes :: [(String, Int)] -> Double -> Double -> [(String, Int)]
--- redistributeVotes votes transferableVotes weightFactor = [(x, y+ round(transferableVotes * weightFactor)) | (x,y ) <- tail votes]
-
--- test7 = realToFrac (calculateTransferable finalVotes "D. Milliband")
--- test8 = calculateWeightFactor weight 111 43.5 test7 finalVotes
--- test9 = redistributeVotes firstPref 40 test8
--- test10 = zipWith (zipWith (+)) [1,2,3,4] [("D. Abbott",2),("E. Balls",18),("A. Burbhm",17),("E. Milliband",40)]
-
--- test13 surpluses votes = [y | x <- surpluses, let y = map (applySurplus x) votes]
-
-applySurplus :: [Double] -> [(String, Double)] -> [(String, Double)]
-applySurplus surpluses votes = zip (map fst votes) (zipWith (+) surpluses (map snd votes))
--------------------
-
-
-
--- run election without weights, if quota is met then move to elected and remove from contention, else eliminate the tail 
-startElection :: Double -> Int -> [(String, Double)] -> [(String, Double)] -> [(String, Double)] -> IO()
-startElection weight numSeats elected eliminated [] = print elected
-startElection weight 0 elected _ _ = print elected
-startElection weight numSeats elected eliminated votes = 
-    if realToFrac(snd (head votes)) > 10 then do
-        let transferable = calculateTransferable finalVotes (fst (head votes))
-        let weightFactor = calculateWeightFactor weight (realToFrac (snd (head votes)) - quota) (realToFrac transferable)
-        let surplusForEach = [y | x <- filter (/= fst (head votes)) (map fst votes), let y = realToFrac (calculateSurplusPerCandidate finalVotes (fst (head votes)) x)]
-        let adjustedSurplus = map (*weightFactor) surplusForEach
-        let updatedVotes = applySurplus adjustedSurplus (tail votes)
-
-        -- putStrLn "\nCURRENT VOTES --> " 
-        -- print votes 
-
-        putStrLn $ "\nTRANSFERABLE VOTES OF: " ++ fst (head votes)
-        print transferable 
-
-        putStrLn "\nSURPLUS --> " 
-        print (realToFrac (snd (head votes)) - quota) 
-
-        putStrLn "\nWEIGHT FACTOR --> " 
-        print weightFactor 
-
-        putStrLn "\nSURPLUS VOTES --> " 
-        print adjustedSurplus 
-
-        putStrLn "\nUPDATED VOTES --> " 
-        print updatedVotes 
-
-        -- putStrLn "\nELECTING --> " 
-        -- print (head votes)
-
-        startElection weightFactor (numSeats - 1) (elected ++ [head votes]) eliminated updatedVotes
-
-    else do
-
-        print $ (head votes , "IS NOT ELECTED")
-        
-        -- startElection weight (numSeats) (elected) (eliminated ++ [(last votes)]) (votes)
-
-
----------------------------
-
-debugVotes ::[[String]]
-debugVotes = [
-    [ "D. Abbott"],["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],
-    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],["A. Burbhm","D. Milliband","E. Milliband"],
-    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],["D. Milliband","E. Milliband"],
-    ["E. Balls","E. Milliband","D. Milliband","A. Burbhm","D. Abbott"],
-    ["E. Balls","D. Milliband","A. Burbhm","E. Milliband","D. Abbott"],
-    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm"],
-    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["E. Balls"],["D. Milliband","E. Milliband","E. Balls","A. Burbhm"],
-    ["A. Burbhm","E. Milliband","D. Milliband","E. Balls","D. Abbott"],
-    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["E. Milliband"],["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["D. Milliband","E. Balls"],["E. Milliband","D. Milliband"],
-    ["A. Burbhm","D. Milliband","E. Milliband","E. Balls"],["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["A. Burbhm","E. Milliband"],["E. Milliband","A. Burbhm"],["A. Burbhm","D. Milliband","E. Balls","E. Milliband"],
-    ["E. Balls","D. Milliband"],["E. Milliband"],["A. Burbhm","D. Milliband"],["D. Milliband"],
-    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm","D. Abbott"],["E. Balls","E. Milliband","D. Milliband"],
-    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm"],["D. Milliband","E. Balls","A. Burbhm","E. Milliband","D. Abbott"],
-    ["E. Milliband"],["D. Milliband","E. Milliband","E. Balls"],
-    ["A. Burbhm","D. Milliband","E. Milliband","E. Balls","D. Abbott"],
-    ["D. Milliband","E. Balls","E. Milliband"],["D. Milliband"],["D. Milliband","A. Burbhm"],["A. Burbhm","E. Milliband"],
-    ["D. Milliband","E. Milliband"],["E. Milliband","D. Abbott","E. Balls"],["D. Milliband"],
-    ["D. Abbott","E. Balls","E. Milliband","A. Burbhm","D. Milliband"],
-    ["D. Milliband","A. Burbhm","D. Abbott","E. Milliband","E. Balls"],["D. Milliband"],
-    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm"],
-    ["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],
-    ["A. Burbhm","E. Balls","E. Milliband","D. Milliband","D. Abbott"],
-    ["D. Milliband","E. Balls"],["E. Balls"],["D. Abbott","E. Milliband"],
-    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm","D. Abbott"],
-    ["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],
-    ["D. Milliband","E. Milliband"],
-    ["D. Milliband","E. Balls","E. Milliband","D. Abbott","A. Burbhm"],
-    ["E. Milliband","E. Balls","D. Milliband","A. Burbhm","D. Abbott"],
-    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm","D. Abbott"],["E. Balls","E. Milliband","D. Milliband","A. Burbhm"],
-    ["E. Milliband","D. Milliband","A. Burbhm","E. Balls","D. Abbott"],
-    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],["D. Milliband"],["D. Milliband"],
-    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["E. Balls","E. Milliband","D. Milliband","A. Burbhm","D. Abbott"],["E. Milliband","D. Milliband","E. Balls"],
-    ["D. Milliband","E. Milliband"],["E. Milliband"],["E. Balls","E. Milliband"],["E. Milliband","E. Balls"],
-    ["A. Burbhm","D. Milliband","E. Milliband","E. Balls"],["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm"],["D. Milliband"],
-    ["D. Milliband","E. Milliband","E. Balls","D. Abbott","A. Burbhm"],["E. Milliband"],["E. Balls","E. Milliband"],
-    ["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],["E. Milliband"],
-    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],["D. Milliband","A. Burbhm","E. Milliband"],
-    ["D. Milliband","A. Burbhm"],["E. Milliband"],["E. Milliband","A. Burbhm","D. Milliband","E. Balls","D. Abbott"],
-    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm"],["E. Milliband","D. Milliband","A. Burbhm","E. Balls","D. Abbott"],
-    ["E. Milliband","A. Burbhm"],["D. Milliband"],["A. Burbhm","D. Milliband","E. Milliband"],["D. Milliband"],
-    ["D. Milliband","A. Burbhm","D. Abbott","E. Balls","E. Milliband"],["A. Burbhm","D. Milliband"],["E. Milliband","E. Balls"],
-    ["D. Milliband","A. Burbhm","E. Balls","E. Milliband","D. Abbott"],["D. Milliband","E. Milliband"],
-    ["D. Milliband","E. Milliband","A. Burbhm","D. Abbott","E. Balls"],
-    ["D. Milliband","E. Balls","A. Burbhm","E. Milliband","D. Abbott"],
-    ["D. Milliband","A. Burbhm","E. Milliband","E. Balls","D. Abbott"],
-    ["E. Milliband","D. Milliband","A. Burbhm","E. Balls","D. Abbott"],["A. Burbhm","D. Milliband"],["E. Milliband"],
-    ["E. Milliband","D. Milliband","A. Burbhm","E. Balls"],["E. Balls","E. Milliband","A. Burbhm","D. Milliband","D. Abbott"],
-    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],["E. Balls","E. Milliband","D. Milliband"],
-    ["E. Balls","E. Milliband","D. Milliband","A. Burbhm","D. Abbott"],["E. Milliband","D. Milliband"],
-    ["E. Milliband","E. Balls","A. Burbhm","D. Milliband"],["D. Milliband","E. Milliband","A. Burbhm","E. Balls"],
-    ["D. Milliband","A. Burbhm","E. Milliband","E. Balls","D. Abbott"],["D. Milliband"],["E. Milliband","E. Balls"],
-    ["E. Balls","E. Milliband"],["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],["E. Balls","D. Milliband"],
-    ["A. Burbhm","E. Milliband","D. Milliband","E. Balls","D. Abbott"],["D. Milliband","E. Balls","A. Burbhm"],
-    ["A. Burbhm","D. Milliband","E. Milliband","E. Balls","D. Abbott"],["D. Milliband"],["E. Milliband","E. Balls"],
-    ["E. Balls","A. Burbhm","E. Milliband","D. Milliband","D. Abbott"],["A. Burbhm","E. Milliband","D. Milliband"],
-    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["E. Milliband","E. Balls","D. Milliband","A. Burbhm","D. Abbott"],
-    ["D. Abbott","E. Milliband","E. Balls","A. Burbhm","D. Milliband"],
-    ["D. Milliband","E. Balls"],["D. Milliband","E. Milliband"],["E. Balls","E. Milliband","D. Milliband"],
-    ["E. Milliband","D. Milliband","A. Burbhm"],["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],
-    ["D. Milliband","A. Burbhm","E. Milliband","E. Balls"],["E. Milliband","E. Balls"],
-    ["E. Milliband","A. Burbhm","D. Milliband","E. Balls","D. Abbott"],["D. Milliband"],["E. Balls","D. Milliband"],
-    ["E. Milliband","E. Balls","A. Burbhm","D. Milliband"],["E. Balls","E. Milliband","D. Milliband"],
-    ["D. Milliband","A. Burbhm"],["E. Milliband","D. Milliband"],
-    ["D. Milliband","A. Burbhm","E. Milliband","D. Abbott","E. Balls"],
-    ["E. Balls","E. Milliband","A. Burbhm","D. Milliband","D. Abbott"],["D. Milliband","E. Milliband","A. Burbhm","E. Balls"],
-    ["E. Balls","E. Milliband","D. Milliband","A. Burbhm","D. Abbott"],
-    ["A. Burbhm","E. Milliband","D. Milliband","E. Balls","D. Abbott"],["D. Milliband"],["E. Milliband"],
-    ["D. Milliband","D. Abbott","E. Balls","E. Milliband","A. Burbhm"],["E. Milliband","A. Burbhm"],["E. Milliband"],
-    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm","D. Abbott"],["D. Milliband"],
-    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["E. Milliband","E. Balls","D. Milliband","A. Burbhm","D. Abbott"],["D. Milliband"],["D. Milliband","E. Balls"],
-    ["E. Balls","E. Milliband","D. Abbott","D. Milliband","A. Burbhm"],["E. Milliband"],["D. Milliband","E. Milliband"],
-    ["E. Milliband","D. Milliband","A. Burbhm","E. Balls"],["D. Milliband"],["E. Milliband"],
-    ["E. Balls","E. Milliband","D. Milliband"],["D. Milliband"],["E. Milliband","D. Milliband","A. Burbhm"],
-    ["E. Balls","D. Milliband"],["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],["D. Milliband"],
-    ["D. Abbott"],["D. Milliband"],["D. Milliband","A. Burbhm","E. Milliband","E. Balls","D. Abbott"],["E. Milliband"],
-    ["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],["E. Milliband","E. Balls"],["E. Milliband"],
-    ["E. Milliband","D. Abbott"],["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],
-    ["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],["D. Milliband","E. Milliband"],
-    ["E. Milliband","D. Milliband"],["A. Burbhm","D. Milliband","E. Milliband","E. Balls"],
-    ["E. Milliband","D. Milliband","E. Balls","D. Abbott","A. Burbhm"],["E. Milliband","E. Balls"],["D. Milliband"],
-    ["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],["E. Milliband"],
-    ["E. Milliband","A. Burbhm","E. Balls","D. Abbott","D. Milliband"],["E. Balls","E. Milliband"],["D. Milliband"],
-    ["D. Milliband"],["E. Milliband","D. Milliband"],["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["E. Milliband","E. Balls"],["D. Milliband"],["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],
-    ["E. Milliband","D. Milliband","D. Abbott"],["E. Milliband"],["E. Milliband","A. Burbhm","D. Milliband","E. Balls"],
-    ["E. Balls","E. Milliband","D. Milliband"],["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],
-    ["D. Milliband"],["E. Milliband","A. Burbhm","D. Milliband","E. Balls"],["E. Milliband"],["D. Milliband"],
-    ["D. Milliband"],["D. Milliband","E. Milliband","A. Burbhm","E. Balls"],
-    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["E. Milliband","D. Milliband","E. Balls","A. Burbhm","D. Abbott"],["D. Milliband","E. Milliband"],
-    ["D. Abbott","E. Milliband"],["E. Balls","E. Milliband","D. Milliband","A. Burbhm","D. Abbott"],
-    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm","D. Abbott"],["A. Burbhm","E. Milliband"],
-    ["D. Milliband"],["E. Milliband","E. Balls","D. Milliband"],
-    ["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],["E. Milliband"],
-    ["D. Milliband","E. Milliband"],["E. Milliband"],["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["D. Milliband"],["E. Milliband"],["E. Milliband","E. Balls"],["A. Burbhm","E. Milliband"],
-    ["E. Milliband","D. Milliband","E. Balls"],["D. Milliband"],["D. Milliband"],["E. Milliband"],
-    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm","D. Abbott"],["D. Milliband","A. Burbhm"],
-    ["D. Milliband","E. Balls","E. Milliband","A. Burbhm","D. Abbott"],
-    ["E. Milliband","E. Balls","D. Milliband","A. Burbhm","D. Abbott"],
-    ["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],
-    ["E. Balls","D. Milliband","E. Milliband","A. Burbhm"],["E. Milliband","D. Milliband","A. Burbhm","E. Balls","D. Abbott"],
-    ["D. Milliband","A. Burbhm","E. Balls"],["D. Milliband","A. Burbhm"],["D. Milliband"],
-    ["A. Burbhm","D. Milliband","E. Balls","E. Milliband","D. Abbott"],
-    ["D. Milliband","E. Balls","A. Burbhm","E. Milliband","D. Abbott"],["D. Milliband"],["E. Milliband"],
-    ["E. Milliband","D. Milliband","A. Burbhm","E. Balls"],["E. Balls","E. Milliband","D. Milliband","D. Abbott"],
-    ["A. Burbhm","D. Milliband","E. Milliband","E. Balls","D. Abbott"],
-    ["A. Burbhm","D. Milliband","E. Balls","E. Milliband","D. Abbott"],["D. Milliband","E. Milliband"],
-    ["E. Milliband","D. Milliband"],["E. Milliband","D. Milliband"],
-    ["D. Milliband","E. Milliband","E. Balls","D. Abbott","A. Burbhm"],["D. Milliband","D. Abbott","E. Milliband"],
-    ["E. Milliband","A. Burbhm"],["E. Balls","E. Milliband","A. Burbhm","D. Milliband","D. Abbott"],
-    ["A. Burbhm","E. Balls","E. Milliband","D. Abbott","D. Milliband"],["E. Milliband","A. Burbhm","D. Milliband"],
-    ["D. Milliband","E. Milliband","A. Burbhm","E. Balls","D. Abbott"],
-    ["E. Milliband","E. Balls","D. Milliband","A. Burbhm","D. Abbott"],["E. Milliband","D. Milliband"],
-    ["D. Milliband","A. Burbhm"],["D. Milliband"],["E. Milliband"],["D. Abbott","E. Milliband","E. Balls"],
-    ["D. Milliband","A. Burbhm","E. Milliband","E. Balls"],["D. Milliband","E. Milliband","E. Balls","A. Burbhm","D. Abbott"],
-    ["D. Milliband"],["E. Balls","D. Milliband","E. Milliband","A. Burbhm"],
-    ["E. Balls","E. Milliband","A. Burbhm","D. Milliband","D. Abbott"]]
