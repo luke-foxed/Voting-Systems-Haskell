@@ -28,9 +28,14 @@ main = do
 
         let calcQuota = quota cleanedVotes (readAsInt seats)
         let votingPrefs = firstPref cleanedVotes cans
-        let electionResults = startElection (readAsInt seats) calcQuota votingPrefs cleanedVotes
-        
-        print electionResults 
+
+        -- DETAILED OUTPUT 
+        electionResults <- startDetailedElection (readAsInt seats) calcQuota votingPrefs cleanedVotes
+        putStrLn electionResults 
+
+        -- RETURN ONLY WINNERS
+        -- let electionResults = startElection (readAsInt seats) calcQuota votingPrefs cleanedVotes
+        -- print (show electionResults)
 
     else do
         putStrLn "\nPlease enter a valid option...\n"

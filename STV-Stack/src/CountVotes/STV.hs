@@ -43,11 +43,11 @@ calculateSurplusPerCandidate votes currentCan nextCan = length ([x | x <- votes,
 applySurplus :: [Double] -> [VotesRecieved] -> [VotesRecieved]
 applySurplus surpluses votes = zip (map fst votes) (zipWith (+) surpluses (map snd votes))
 
--- main function which returns the elected candidates
-runElection :: Double -> Double -> Int -> [(String, Double)] -> [(String, Double)] -> [VotesRecieved] -> SortedVotes -> [(String, Double)]
-runElection _ _ _ elected _ [] _ = elected
-runElection _ _ 0 elected _ _ _  = elected
-runElection
+-- returns IO String containing election details including winners
+runDetailedElection :: Double -> Double -> Int -> [(String, Double)] -> [(String, Double)] -> [VotesRecieved] -> SortedVotes -> IO String
+runDetailedElection _ _ _ elected eliminated [] _ = return ("\nELECTED:\n" ++ show elected ++ "\n\nELIMINATED:\n" ++ show eliminated)
+runDetailedElection _ _ 0 elected eliminated _ _  = return ("\nELECTED:\n" ++ show elected ++ "\n\nELIMINATED:\n" ++ show eliminated)
+runDetailedElection
   calcQuota
   weight
   numSeats
@@ -64,11 +64,18 @@ runElection
         let adjustedSurplus = map (* weightFactor) surplusForEach
         let updatedPrefs = applySurplus adjustedSurplus (tail firstPrefs)
 
-        runElection calcQuota weightFactor (numSeats - 1) (elected ++ [head firstPrefs]) eliminated updatedPrefs allVotes
+        putStrLn "\nNEXT ROUND\n"
+        print firstPrefs
+
+        print $ show(fst (head firstPrefs)) ++ " is elected with weight of: " ++ show (snd (head firstPrefs))
+        print $ "Redistributing surplus of: " ++ show(snd (head firstPrefs) - calcQuota)
+        print $ "Weight factor is: " ++ show weightFactor
+
+        runDetailedElection calcQuota weightFactor (numSeats - 1) (elected ++ [head firstPrefs]) eliminated updatedPrefs allVotes
 
   -- if there is only one seat left and one candidate left, elect the candidate regardless
-  | numSeats == 1 && length firstPrefs == 1 = 
-        runElection calcQuota weight (numSeats - 1) (elected ++ [head firstPrefs]) [] [] []
+  | numSeats == 1 && length firstPrefs == 1 =
+        runDetailedElection calcQuota weight (numSeats - 1) (elected ++ [head firstPrefs]) eliminated [] []
 
   -- else eliminate the candidate with the least first preferences and distribute their votes
   | otherwise = do 
@@ -76,12 +83,55 @@ runElection
         let surplusForEach = [y | x <- filter (/= fst (last firstPrefs)) (map fst firstPrefs), let y = realToFrac (calculateSurplusPerCandidate allVotes (fst (last firstPrefs)) x)]
         let adjustedSurplus = map (* weight) surplusForEach
         let updatedPrefs = applySurplus adjustedSurplus (removeCandidate firstPrefs (last firstPrefs))
+
+        putStrLn "\nQUOTA NOT MET, ELIMINATING AND DISTRIBUTING\n"
+        print $ show(fst (last firstPrefs)) ++ " is eliminated with weight of: " ++ show (snd (last firstPrefs)) 
+        print $ "Required quota: " ++ show calcQuota
         
-        runElection calcQuota weight numSeats elected (eliminated ++ [last firstPrefs]) updatedPrefs allVotes
+        runDetailedElection calcQuota weight numSeats elected (eliminated ++ [last firstPrefs]) updatedPrefs allVotes
 
 -- function to communicate with driver to start the election
-startElection :: Int -> Double -> [VotesRecieved] -> [[String]] -> [(String, Double)]
-startElection seats calcQuota = runElection calcQuota weight seats elected eliminated
+startDetailedElection :: Int -> Double -> [VotesRecieved] -> [[String]] -> IO String
+startDetailedElection seats calcQuota = runDetailedElection calcQuota weight seats elected eliminated
+
+-- same functionality, only the winners are returned with no further details
+-- runElection :: Double -> Double -> Int -> [(String, Double)] -> [(String, Double)] -> [VotesRecieved] -> SortedVotes -> [(String, Double)]
+-- runElection _ _ _ elected _ [] _ = elected
+-- runElection _ _ 0 elected _ _ _  = elected
+-- runElection
+--   calcQuota
+--   weight
+--   numSeats
+--   elected
+--   eliminated
+--   firstPrefs
+--   allVotes
+
+--   -- initial run, check if candidate equal or greater than quota - if so, elect them, distribute the surplus and re run the election
+--   | realToFrac (snd (head firstPrefs)) > calcQuota = do 
+--         let transferable = calculateTransferable allVotes (fst (head firstPrefs))
+--         let weightFactor = calculateWeightFactor weight (realToFrac (snd (head firstPrefs)) - calcQuota) (realToFrac transferable)
+--         let surplusForEach = [y | x <- filter (/= fst (head firstPrefs)) (map fst firstPrefs), let y = realToFrac (calculateSurplusPerCandidate allVotes (fst (head firstPrefs)) x)]
+--         let adjustedSurplus = map (* weightFactor) surplusForEach
+--         let updatedPrefs = applySurplus adjustedSurplus (tail firstPrefs)
+--         runElection calcQuota weightFactor (numSeats - 1) (elected ++ [head firstPrefs]) eliminated updatedPrefs allVotes
+
+--   -- if there is only one seat left and one candidate left, elect the candidate regardless
+--   | numSeats == 1 && length firstPrefs == 1 =
+--         runElection calcQuota weight (numSeats - 1) (elected ++ [head firstPrefs]) [] [] []
+
+--   -- else eliminate the candidate with the least first preferences and distribute their votes
+--   | otherwise = do 
+--         let transferable = calculateTransferable allVotes (fst (last firstPrefs))
+--         let surplusForEach = [y | x <- filter (/= fst (last firstPrefs)) (map fst firstPrefs), let y = realToFrac (calculateSurplusPerCandidate allVotes (fst (last firstPrefs)) x)]
+--         let adjustedSurplus = map (* weight) surplusForEach
+--         let updatedPrefs = applySurplus adjustedSurplus (removeCandidate firstPrefs (last firstPrefs))
+
+--         runElection calcQuota weight numSeats elected (eliminated ++ [last firstPrefs]) updatedPrefs allVotes
+
+-- startElection :: Int -> Double -> [VotesRecieved] -> [[String]] -> [(String, Double)]
+-- startElection seats calcQuota = runElection calcQuota weight seats elected eliminated
+
 
 
 ------------------------

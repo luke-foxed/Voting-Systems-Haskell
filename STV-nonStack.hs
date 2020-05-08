@@ -457,9 +457,9 @@ calculateSurplusPerCandidate votes currentCan nextCan = length ([x | x <- votes,
 applySurplus :: [Double] -> [(String, Double)] -> [(String, Double)]
 applySurplus surpluses votes = zip (map fst votes) (zipWith (+) surpluses (map snd votes))
 
-startElection :: Double -> Int -> [(String, Double)] -> [(String, Double)] -> [(String, Double)] -> IO()
-startElection _ _ elected _ []  = putStrLn $"\nWINNERS: " ++ show elected
-startElection _ 0 elected _ _   = putStrLn $"\nWINNERS: " ++ show elected
+startElection :: Double -> Int -> [(String, Double)] -> [(String, Double)] -> [(String, Double)] -> IO String
+startElection _ _ elected _ []  = return (show elected)
+startElection _ 0 elected _ _   = return (show elected)
 startElection weight numSeats elected eliminated votes
 
   -- initial run, check if candidate equal or greater than quota - if so, elect them, distribute the surplus and re run the election
@@ -496,6 +496,10 @@ startElection weight numSeats elected eliminated votes
 
         startElection weight numSeats elected (eliminated ++ [last votes]) updatedVotes
 
+
+main = do
+    str <- startElection weight numSeats elected eliminated firstPref
+    putStrLn str
 ------------------------
 --      OLD CODE      --
 ------------------------
