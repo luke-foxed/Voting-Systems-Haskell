@@ -9,7 +9,7 @@ parseRawVotes rawVotes = map convertToList (tail (splitOn "\n" rawVotes))
 
 -- convert each newline string to a list
 convertToList :: String -> [String]
-convertToList vote = splitOn "," vote
+convertToList = splitOn ","
 
 -- get candidates
 candidates :: [[String]] -> Candidates
@@ -57,7 +57,7 @@ extractVotes votes = map rmEmptyVotes (sortVotes votes)
 
 -- remove asterix and vote number which isn't needed 
 rmEmptyVotes :: [(String, String)] -> Votes
-rmEmptyVotes vote = [(fst x, snd x) | x <- vote, snd x /= "*"]
+rmEmptyVotes vote = [x | x <- vote, snd x /= "*"]
 
 -- take from list until duplicate is encountered, modified from: https://stackoverflow.com/questions/28755554/taking-from-a-list-until-encountering-a-duplicate
 takeUntilDuplicate :: Eq a => [(String, a)] -> [(String, a)]

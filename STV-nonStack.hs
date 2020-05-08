@@ -462,59 +462,33 @@ calculateSurplusPerCandidate votes currentCan nextCan = length ([x | x <- votes,
 applySurplus :: [Double] -> [(String, Double)] -> [(String, Double)]
 applySurplus surpluses votes = zip (map fst votes) (zipWith (+) surpluses (map snd votes))
 
--- run election without weights, if quota is met then move to elected and remove from contention, else eliminate the tail 
 startElection :: Double -> Int -> [(String, Double)] -> [(String, Double)] -> [(String, Double)] -> IO()
-startElection weight numSeats elected eliminated [] = print elected
-startElection weight 0 elected _ _ = print elected
-startElection weight numSeats elected eliminated votes = 
-    if realToFrac(snd (head votes)) > quota then do
+startElection _ _ elected _ []  = print elected
+startElection _ 0 elected _ _   = print elected
+startElection weight numSeats elected eliminated votes
+
+  -- initial run, check if candidate equal or greater than quota - if so, elect them, distribute the surplus and re run the election
+  | realToFrac (snd (head votes)) >= quota = do 
         let transferable = calculateTransferable finalVotes (fst (head votes))
         let weightFactor = calculateWeightFactor weight (realToFrac (snd (head votes)) - quota) (realToFrac transferable)
-        let surplusForEach = [y | x <- filter (/= fst (head votes)) (map fst votes), let y = realToFrac (calculateSurplusPerCandidate finalVotes (fst (head votes)) x)]
-        let adjustedSurplus = map (*weightFactor) surplusForEach
+        let surplusForEach = [y | x <- filter (/= fst (head votes)) (map fst votes), let y = realToFrac(calculateSurplusPerCandidate finalVotes (fst (head votes)) x)]
+        let adjustedSurplus = map (* weightFactor) surplusForEach
         let updatedVotes = applySurplus adjustedSurplus (tail votes)
 
-        putStrLn "\nCURRENT VOTES --> " 
-        print votes 
-
-        -- putStrLn $ "\nTRANSFERABLE VOTES OF: " ++ fst (head votes)
-        -- print transferable 
-
-        -- putStrLn "\nSURPLUS --> " 
-        -- print (realToFrac (snd (head votes)) - quota) 
-
-        -- putStrLn "\nWEIGHT FACTOR --> " 
-        -- print weightFactor 
-
-        -- putStrLn "\nSURPLUS VOTES --> " 
-        -- print adjustedSurplus 
-
-        -- putStrLn "\nUPDATED VOTES --> " 
-        -- print updatedVotes 
-
-        -- putStrLn "\nELECTING --> " 
-        -- print (head votes)
-
         startElection weightFactor (numSeats - 1) (elected ++ [head votes]) eliminated updatedVotes
-    
-    else if numSeats==1 && length votes ==1 then
+
+  -- if there is only one seat left and one candidate left, elect the candidate regardless
+  | numSeats == 1 && length votes == 1 = 
         startElection weight (numSeats - 1) (elected ++ [head votes]) eliminated []
 
-    else do
-
+  -- else eliminate the candidate with the least first preferences and distribute their votes
+  | otherwise = do 
         let transferable = calculateTransferable finalVotes (fst (last votes))
         let surplusForEach = [y | x <- filter (/= fst (last votes)) (map fst votes), let y = realToFrac (calculateSurplusPerCandidate finalVotes (fst (last votes)) x)]
-        let adjustedSurplus = map (*weight) surplusForEach
+        let adjustedSurplus = map (* weight) surplusForEach
         let updatedVotes = applySurplus adjustedSurplus (removeCandidate votes (last votes))
 
-        putStrLn "\nVOTES BEFORE ELIMINATION:"
-        print votes 
-
-        putStrLn "\nUPDATED VOTES OF ELIMINATED:"
-        print updatedVotes 
-        
         startElection weight numSeats elected (eliminated ++ [last votes]) updatedVotes
-
 
 ------------------------
 --      OLD CODE      --
