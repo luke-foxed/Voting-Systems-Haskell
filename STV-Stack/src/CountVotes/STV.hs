@@ -39,7 +39,7 @@ calculateTransferable votes can = length ([x | x <- votes, x /= [] && head x == 
 calculateSurplusPerCandidate :: SortedVotes -> String -> String -> Int
 calculateSurplusPerCandidate votes currentCan nextCan = length ([x | x <- votes, tail x /= [] && head x == currentCan && head (tail x) == nextCan])
 
--- add list of surpluses to the respective candidate 
+-- add list of surpluses to the respective candidates
 applySurplus :: [Double] -> [VotesRecieved] -> [VotesRecieved]
 applySurplus surpluses votes = zip (map fst votes) (zipWith (+) surpluses (map snd votes))
 
@@ -154,3 +154,13 @@ startElection seats calcQuota = runElection calcQuota weight seats elected elimi
 -- to do --> fix calculating transferable votes
 -- drop from list until candidate is head of that list
 -- ensure the tail of this new list is not null
+
+-- test4 = getIndex "D. Milliband" "E. Milliband"
+-- test5 = filter (/=[]) (reassembleVotes test4 (filterVotes "D. Milliband" "E. Milliband" finalVotes))
+-- test6 = calculateTransferable test5 "D. Milliband"
+
+-- reassembleVotes :: [Int] -> [[String]]-> [[String]]
+-- reassembleVotes indexes votes = zipWith (drop) (indexes) (votes)
+
+-- getIndex :: String -> String -> [Int]
+-- getIndex currentCan nextCan = map (fromMaybe 0 . (nextCan `elemIndex`)) (filterVotes currentCan nextCan finalVotes)
