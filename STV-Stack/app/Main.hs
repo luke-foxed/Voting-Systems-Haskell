@@ -22,12 +22,15 @@ main = do
         print $ "Winner is: " ++ altVoteWinner
 
     else if choice =="2" then do
-        let votingPrefs = finalPrefs cleanedVotes cans
-        let electionResults = startElection votingPrefs 
-        print electionResults 
 
-        putStrLn "\n(Winner from each round):\n"
-        print $ finalPrefs cleanedVotes cans
+        putStrLn "Enter the number of seats:"
+        seats <- getLine
+
+        let calcQuota = quota cleanedVotes (readAsInt seats)
+        let votingPrefs = firstPref cleanedVotes cans
+        let electionResults = startElection (readAsInt seats) calcQuota votingPrefs cleanedVotes
+        
+        print electionResults 
 
     else do
         putStrLn "\nPlease enter a valid option...\n"

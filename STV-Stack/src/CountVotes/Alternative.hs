@@ -2,6 +2,9 @@ module CountVotes.Alternative where
 
 import Data.List(sort)
 
+-- The following code is sourced from 'Programming in Haskell' by Graham Hutton.
+-- The code is referenced from pages 86 to 88.
+
 countOccurances :: Eq a => a -> [a] -> Int
 countOccurances x = length . filter (== x)
 
@@ -27,4 +30,4 @@ getWinner bs = case rankCandidates (rmEmptyBallots bs) of
                 (c:cs) -> getWinner (eliminateCandidate c bs)
 
 startAlternativeVoting :: [[String]] -> String
-startAlternativeVoting votes = getWinner votes
+startAlternativeVoting = getWinner
